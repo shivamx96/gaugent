@@ -149,6 +149,52 @@ final class ProviderProcessTests: XCTestCase {
         }
     }
 
+    func testClaudeFallsBackToTheCLIsOwnSnapshotForTheSameAccountOnly() throws {
+        let path = try install("claude", script: fakeClaude)
+        let provider = ClaudeProvider(preferredPath: path, home: directory, configDirectory: directory)
+        let configURL = directory.appendingPathComponent(".claude.json")
+
+        func writeConfig(email: String, cachedAccount: String = "acc") throws {
+            let object: [String: Any] = [
+                "oauthAccount": ["emailAddress": email, "organizationUuid": "org", "accountUuid": "acc"],
+                "cachedUsageUtilization": [
+                    "fetchedAtMs": 1_700_000_000_000, "accountUuid": cachedAccount,
+                    "utilization": ["limits": [["kind": "weekly_all", "percent": 42, "resets_at": "2030-01-01T00:00:00Z"]],
+                                    "extra_usage": ["is_enabled": false]]
+                ]
+            ]
+            try JSONSerialization.data(withJSONObject: object).write(to: configURL)
+        }
+
+        try writeConfig(email: "alice")
+        withEnvironment(["TEST_NULL_RATES": "1"]) {
+            let reading = provider.read(previous: nil)
+            XCTAssertEqual(reading.condition, .ready)
+            XCTAssertEqual(reading.windows.map(\.label), ["Weekly · All models"])
+            XCTAssertEqual(reading.windows.map(\.remainingPercent), [58])
+            XCTAssertEqual(reading.updatedAt, Date(timeIntervalSince1970: 1_700_000_000))
+            XCTAssertTrue(reading.message.contains("last fetched"))
+            XCTAssertTrue(reading.isStale(), "an old snapshot is shown but never trusted for warnings")
+        }
+
+        let live = provider.read(previous: nil)
+        XCTAssertEqual(live.condition, .ready)
+        withEnvironment(["TEST_NULL_RATES": "1"]) {
+            let kept = provider.read(previous: live)
+            XCTAssertEqual(kept.windows, live.windows, "a fresher previous reading beats an older snapshot")
+            XCTAssertEqual(kept.condition, .error)
+        }
+
+        try writeConfig(email: "bob")
+        withEnvironment(["TEST_NULL_RATES": "1"]) {
+            XCTAssertEqual(provider.read(previous: nil).windows, [])
+        }
+        try writeConfig(email: "alice", cachedAccount: "someone-else")
+        withEnvironment(["TEST_NULL_RATES": "1"]) {
+            XCTAssertEqual(provider.read(previous: nil).windows, [])
+        }
+    }
+
     func testMissingExecutablesStartNothing() {
         let nothing: ExecutableResolver = { _, _, _ in nil }
         let codex = CodexProvider(home: directory, resolver: nothing)

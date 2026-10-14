@@ -46,8 +46,10 @@ public struct ClaudeProvider: UsageProvider {
             return unavailable(installed: false)
         }
         var usage = unavailable(installed: true)
+        var lastAuthentication: ClaudeAuthentication?
         do {
             let auth = try authentication(executable: executable)
+            lastAuthentication = auth
             usage.authenticated = auth.loggedIn
             usage.accountKey = auth.accountKey
             usage.plan = ClaudePlan.resolve(auth: auth, configDirectory: resolvedConfigDirectory)
@@ -73,7 +75,7 @@ public struct ClaudeProvider: UsageProvider {
             guard let rates = payload["rate_limits"] as? [String: Any] else {
                 // The CLI answers from its own usage endpoint; a null here means that fetch was
                 // declined (usually a rate limit) and will likely succeed on a later refresh.
-                usage.retainReading(from: previous, message: "Claude Code could not fetch usage right now. It is retried automatically.")
+                fallBack(&usage, previous: previous, auth: auth, message: "Claude Code could not fetch usage right now. It is retried automatically.")
                 return usage
             }
             usage.windows = ClaudeRateLimits.windows(rates)
@@ -82,9 +84,28 @@ public struct ClaudeProvider: UsageProvider {
             usage.condition = .ready
             usage.message = usage.windows.isEmpty ? "No allowance windows were reported for this account." : ""
         } catch {
-            usage.retainReading(from: previous, message: "Could not refresh Claude usage. Retry or update Claude Code if this persists.")
+            fallBack(&usage, previous: previous, auth: usage.authenticated ? lastAuthentication : nil,
+                     message: "Could not refresh Claude usage. Retry or update Claude Code if this persists.")
         }
         return usage
+    }
+
+    /// Uses the newest reading available when a live fetch fails: the CLI's own persisted
+    /// snapshot in `.claude.json` or the previous reading, whichever is fresher.
+    ///
+    /// The snapshot is what the CLI shows in its own usage screen, written after its last
+    /// successful fetch. It carries quota numbers only, and is used solely when it belongs to
+    /// the account the CLI just reported. Its fetch time becomes the reading's age, so an old
+    /// snapshot shows dimmed and never drives the low-allowance warning.
+    private func fallBack(_ usage: inout ProviderUsage, previous: ProviderUsage?, auth: ClaudeAuthentication?, message: String) {
+        usage.retainReading(from: previous, message: message)
+        guard let auth, let snapshot = ClaudeUsageSnapshot.load(configDirectory: resolvedConfigDirectory, auth: auth) else { return }
+        if let retained = usage.updatedAt, retained >= snapshot.fetchedAt { return }
+        usage.windows = ClaudeRateLimits.windows(snapshot.rates)
+        usage.notes = ClaudeRateLimits.notes(snapshot.rates)
+        usage.updatedAt = snapshot.fetchedAt
+        usage.condition = .ready
+        usage.message = "Live fetch unavailable; showing the reading Claude Code last fetched itself."
     }
 
     private var resolvedConfigDirectory: URL {
@@ -136,6 +157,29 @@ public struct ClaudeAuthentication: Equatable, Sendable {
         self.orgId = orgId
         self.subscriptionType = subscriptionType
         self.accountKey = accountKey
+    }
+}
+
+/// The usage reading Claude Code persists in `.claude.json` after its own successful fetch.
+public struct ClaudeUsageSnapshot: Sendable {
+    public let rates: [String: Any]
+    public let fetchedAt: Date
+
+    public static func load(configDirectory: URL, auth: ClaudeAuthentication) -> ClaudeUsageSnapshot? {
+        guard let email = auth.email, let orgId = auth.orgId,
+              let data = try? Data(contentsOf: configDirectory.appendingPathComponent(".claude.json")),
+              let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let account = object["oauthAccount"] as? [String: Any],
+              account["emailAddress"] as? String == email,
+              account["organizationUuid"] as? String == orgId,
+              let cached = object["cachedUsageUtilization"] as? [String: Any],
+              let rates = cached["utilization"] as? [String: Any],
+              let fetchedAtMs = finiteNumber(cached["fetchedAtMs"]), fetchedAtMs > 0 else { return nil }
+        if let cachedAccount = cached["accountUuid"] as? String, let profileAccount = account["accountUuid"] as? String,
+           cachedAccount != profileAccount {
+            return nil
+        }
+        return ClaudeUsageSnapshot(rates: rates, fetchedAt: Date(timeIntervalSince1970: fetchedAtMs / 1000))
     }
 }
 

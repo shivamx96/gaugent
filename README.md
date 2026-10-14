@@ -28,6 +28,9 @@ protocol in `GaugentCore`.
   identities only, with owner-only permissions.
 - After a failed refresh the last good reading is kept only when the same account is still
   signed in, and it is shown dimmed. Stale readings never trigger the low-allowance warning.
+- When Claude Code's live fetch is declined (its usage endpoint rate-limits busy accounts),
+  gaugent falls back to the reading the CLI last fetched for itself, stored in `.claude.json`
+  next to the profile, and only when that profile matches the signed-in account.
 - Readings are taken every five minutes, when the panel opens (if older than a minute), and on
   demand with ⌘R. The global shortcut ⌥⌘U opens the panel from anywhere.
 
