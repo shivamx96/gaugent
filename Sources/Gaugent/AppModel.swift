@@ -28,7 +28,7 @@ final class AppModel: ObservableObject {
     }
     @Published var lowThreshold: Int { didSet { save(lowThreshold, for: Keys.lowThreshold) } }
     @Published var enabledProviderIDs: [String] {
-        didSet { save(enabledProviderIDs, for: Keys.enabledProviderIDs); Task { await refresh(force: true) } }
+        didSet { save(enabledProviderIDs, for: Keys.enabledProviderIDs); Task { await refresh(reason: .user) } }
     }
 
     let collector = UsageCollector.standard
@@ -60,7 +60,7 @@ final class AppModel: ObservableObject {
             snapshot = cached
         }
         configureTimers()
-        Task { [weak self] in await self?.refresh(force: true) }
+        Task { [weak self] in await self?.refresh(reason: .automatic) }
     }
 
     // MARK: Derived state
@@ -116,13 +116,22 @@ final class AppModel: ObservableObject {
 
     // MARK: Refresh
 
-    /// Reads every enabled provider. Without `force`, a recent reading is reused.
+    enum RefreshReason {
+        /// The timer or app start: honours per-provider backoff.
+        case automatic
+        /// The panel opened: reuses a reading younger than a minute, then behaves like `automatic`.
+        case panelOpened
+        /// ⌘R or a button: asks every provider now, backoff or not.
+        case user
+    }
+
+    /// Reads every enabled provider according to `reason`.
     ///
     /// Overlapping calls fold into one follow-up so two panel opens do not spawn four CLIs.
-    func refresh(force: Bool) async {
-        if !force, let lastRefresh, now.timeIntervalSince(lastRefresh) < Self.panelRefreshInterval, hasLoaded { return }
+    func refresh(reason: RefreshReason) async {
+        if reason == .panelOpened, let lastRefresh, now.timeIntervalSince(lastRefresh) < Self.panelRefreshInterval, hasLoaded { return }
         if isRefreshing {
-            pendingRefresh = pendingRefresh || force
+            pendingRefresh = pendingRefresh || reason == .user
             return
         }
         isRefreshing = true
@@ -131,7 +140,7 @@ final class AppModel: ObservableObject {
         let previous = snapshot
         let enabled = enabledProviders
         let collector = collector
-        let fresh = await collector.collect(previous: previous, enabled: enabled)
+        let fresh = await collector.collect(previous: previous, enabled: enabled, userInitiated: reason == .user)
         snapshot = fresh
         now = Date()
         hasLoaded = true
@@ -140,8 +149,15 @@ final class AppModel: ObservableObject {
         }
         if pendingRefresh {
             pendingRefresh = false
-            Task { [weak self] in await self?.refresh(force: true) }
+            Task { [weak self] in await self?.refresh(reason: .user) }
         }
+    }
+
+    /// Text for a provider that is waiting out a backoff, or `nil`.
+    func nextAttemptText(_ provider: ProviderUsage) -> String? {
+        guard let next = provider.nextAutomaticAttempt(), next > now, refreshAutomatically else { return nil }
+        let minutes = max(1, Int((next.timeIntervalSince(now) / 60).rounded(.up)))
+        return "Next automatic attempt in \(minutes)m · ⌘R tries now"
     }
 
     private func configureTimers() {
@@ -152,7 +168,7 @@ final class AppModel: ObservableObject {
         if refreshAutomatically {
             refreshTimer = Timer.publish(every: Self.ambientRefreshInterval, on: .main, in: .common)
                 .autoconnect()
-                .sink { [weak self] _ in Task { await self?.refresh(force: true) } }
+                .sink { [weak self] _ in Task { await self?.refresh(reason: .automatic) } }
         }
     }
 

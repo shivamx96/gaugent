@@ -56,6 +56,7 @@ public struct CodexProvider: UsageProvider {
             usage.notes = reading.notes
             usage.updatedAt = Date()
             usage.condition = .ready
+            usage.failureStreak = 0
             if reading.limitReached {
                 usage.message = "Your account has reached a usage or spending limit."
             } else if reading.windows.isEmpty {

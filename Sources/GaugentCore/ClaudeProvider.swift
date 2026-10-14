@@ -82,6 +82,7 @@ public struct ClaudeProvider: UsageProvider {
             usage.notes = ClaudeRateLimits.notes(rates)
             usage.updatedAt = Date()
             usage.condition = .ready
+            usage.failureStreak = 0
             usage.message = usage.windows.isEmpty ? "No allowance windows were reported for this account." : ""
         } catch {
             fallBack(&usage, previous: previous, auth: usage.authenticated ? lastAuthentication : nil,
@@ -161,7 +162,7 @@ public struct ClaudeAuthentication: Equatable, Sendable {
 }
 
 /// The usage reading Claude Code persists in `.claude.json` after its own successful fetch.
-public struct ClaudeUsageSnapshot: Sendable {
+public struct ClaudeUsageSnapshot {
     public let rates: [String: Any]
     public let fetchedAt: Date
 

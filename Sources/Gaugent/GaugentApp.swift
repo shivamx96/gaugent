@@ -114,7 +114,7 @@ final class GaugentAppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegat
     private func present(from button: NSStatusBarButton) {
         popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
         popover.contentViewController?.view.window?.makeKey()
-        if model.refreshAutomatically { Task { await model.refresh(force: false) } }
+        if model.refreshAutomatically { Task { await model.refresh(reason: .panelOpened) } }
     }
 
     @objc private func closePopover() { popover.performClose(nil) }

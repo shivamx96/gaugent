@@ -105,7 +105,7 @@ struct GaugentSettingsView: View {
                 .frame(maxWidth: 320)
             HStack(spacing: 8) {
                 Button("Copy Diagnostics") { model.copyDiagnostics() }.buttonStyle(QuietButtonStyle())
-                Button("Clear Cache") { model.clearCache(); Task { await model.refresh(force: true) } }.buttonStyle(QuietButtonStyle())
+                Button("Clear Cache") { model.clearCache(); Task { await model.refresh(reason: .user) } }.buttonStyle(QuietButtonStyle())
                 Button("GitHub") { model.open(URL(string: "https://github.com/shivamx96/gaugent")!) }.buttonStyle(QuietButtonStyle())
             }
             .padding(.top, 4)

@@ -47,7 +47,7 @@ struct GaugentPanel: View {
                     .accessibilityLabel("Lowest remaining allowance \(Int(lowest)) percent")
             }
             Button {
-                Task { await model.refresh(force: true) }
+                Task { await model.refresh(reason: .user) }
             } label: {
                 Image(systemName: "arrow.clockwise").opacity(model.isRefreshing ? 0.45 : 1)
             }
@@ -86,7 +86,7 @@ struct GaugentPanel: View {
                     title: "No supported tools found",
                     message: "gaugent reads subscription usage from Claude Code and Codex. Install either CLI and refresh.",
                     actionTitle: "Refresh",
-                    action: { Task { await model.refresh(force: true) } }
+                    action: { Task { await model.refresh(reason: .user) } }
                 )
             }
         } else {
@@ -150,7 +150,7 @@ struct GaugentPanel: View {
 
     private func handleKeyboardAction(_ action: PanelKeyboardAction) -> Bool {
         switch action {
-        case .refresh: Task { await model.refresh(force: true) }
+        case .refresh: Task { await model.refresh(reason: .user) }
         case .escape: NotificationCenter.default.post(name: .closeGaugentPanel, object: nil)
         }
         return true

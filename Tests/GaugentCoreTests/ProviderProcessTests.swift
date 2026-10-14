@@ -246,6 +246,39 @@ final class ProviderProcessTests: XCTestCase {
         XCTAssertEqual(only.providers.map(\.id), ["codex"])
     }
 
+    func testCollectorBacksOffFailingProvidersUnlessUserInitiated() async {
+        let counter = CallCounter()
+        let flaky = StubProvider(id: "flaky") { previous in
+            counter.increment()
+            var usage = ProviderUsage(id: "flaky", name: "Flaky", installed: true, authenticated: true, accountKey: "k")
+            usage.retainReading(from: previous, message: "down")
+            return usage
+        }
+        let collector = UsageCollector(providers: [flaky])
+        let start = Date(timeIntervalSince1970: 1_000_000)
+
+        let first = await collector.collect(previous: nil, now: start)
+        XCTAssertEqual(first.providers[0].failureStreak, 1)
+        XCTAssertEqual(first.providers[0].nextAutomaticAttempt(), start.addingTimeInterval(300))
+
+        let tooSoon = await collector.collect(previous: first, now: start.addingTimeInterval(200))
+        XCTAssertEqual(counter.value, 1, "within the backoff the provider is left alone")
+        XCTAssertEqual(tooSoon.providers[0], first.providers[0])
+
+        let forced = await collector.collect(previous: first, userInitiated: true, now: start.addingTimeInterval(200))
+        XCTAssertEqual(counter.value, 2)
+        XCTAssertEqual(forced.providers[0].failureStreak, 2)
+        XCTAssertEqual(forced.providers[0].nextAutomaticAttempt(), start.addingTimeInterval(200 + 600))
+
+        var capped = forced.providers[0]
+        capped.failureStreak = 20
+        XCTAssertEqual(capped.nextAutomaticAttempt(), capped.attemptedAt!.addingTimeInterval(3600))
+
+        let due = await collector.collect(previous: forced, now: start.addingTimeInterval(200 + 601))
+        XCTAssertEqual(counter.value, 3)
+        XCTAssertEqual(due.providers[0].failureStreak, 3)
+    }
+
     func testCacheRoundTripsAndRejectsOtherVersions() throws {
         let url = directory.appendingPathComponent("cache/usage.json")
         let snapshot = UsageSnapshot(checkedAt: Date(timeIntervalSince1970: 1000), providers: [
@@ -265,4 +298,21 @@ final class ProviderProcessTests: XCTestCase {
         try "[]".write(to: url, atomically: true, encoding: .utf8)
         XCTAssertNil(UsageCache.load(from: url))
     }
+}
+
+private struct StubProvider: UsageProvider {
+    let id: String
+    var name: String { id }
+    var executableName: String { id }
+    var signInCommand: String { "" }
+    let body: @Sendable (ProviderUsage?) -> ProviderUsage
+
+    func read(previous: ProviderUsage?) -> ProviderUsage { body(previous) }
+}
+
+private final class CallCounter: @unchecked Sendable {
+    private let lock = NSLock()
+    private var count = 0
+    var value: Int { lock.lock(); defer { lock.unlock() }; return count }
+    func increment() { lock.lock(); count += 1; lock.unlock() }
 }

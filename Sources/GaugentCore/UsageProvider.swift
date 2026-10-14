@@ -39,14 +39,23 @@ public struct UsageCollector: Sendable {
     }
 
     /// Reads every enabled provider concurrently and keeps their configured order.
-    public func collect(previous: UsageSnapshot?, enabled: Set<String>? = nil, now: Date = Date()) async -> UsageSnapshot {
+    ///
+    /// A provider whose last live read failed is left alone until its backoff elapses, so a
+    /// throttled endpoint is not asked again every few minutes. `userInitiated` skips that wait.
+    public func collect(previous: UsageSnapshot?, enabled: Set<String>? = nil, userInitiated: Bool = false, now: Date = Date()) async -> UsageSnapshot {
         let selected = providers.filter { enabled?.contains($0.id) ?? true }
         let readings = await withTaskGroup(of: (Int, ProviderUsage).self) { group in
             for (index, provider) in selected.enumerated() {
                 let last = previous?.provider(provider.id)
+                if !userInitiated, let last, let next = last.nextAutomaticAttempt(), next > now {
+                    group.addTask { (index, last) }
+                    continue
+                }
                 group.addTask {
                     await Task.detached(priority: .utility) {
-                        (index, provider.read(previous: last))
+                        var reading = provider.read(previous: last)
+                        reading.attemptedAt = now
+                        return (index, reading)
                     }.value
                 }
             }

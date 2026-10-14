@@ -58,7 +58,7 @@ struct ProviderCard: View {
             guidance(
                 provider.message.isEmpty ? "No allowance windows were reported." : provider.message,
                 actionTitle: provider.condition == .error ? "Retry" : nil,
-                action: { Task { await model.refresh(force: true) } }
+                action: { Task { await model.refresh(reason: .user) } }
             )
         } else {
             VStack(alignment: .leading, spacing: 9) {
@@ -86,6 +86,11 @@ struct ProviderCard: View {
             }
             if !model.ageText(provider).isEmpty {
                 Text(model.ageText(provider))
+                    .font(.system(size: 9.5))
+                    .foregroundStyle(GaugentTheme.tertiaryInk(colorScheme))
+            }
+            if let next = model.nextAttemptText(provider) {
+                Text(next)
                     .font(.system(size: 9.5))
                     .foregroundStyle(GaugentTheme.tertiaryInk(colorScheme))
             }

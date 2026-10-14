@@ -46,6 +46,10 @@ public struct ProviderUsage: Codable, Equatable, Sendable, Identifiable {
     public var message: String
     /// Hashed identity of the signed-in account. Never the email or token itself.
     public var accountKey: String?
+    /// When the provider was last asked, successful or not.
+    public var attemptedAt: Date?
+    /// Consecutive refreshes whose live read failed; drives the automatic backoff.
+    public var failureStreak: Int
 
     public init(
         id: String,
@@ -58,7 +62,9 @@ public struct ProviderUsage: Codable, Equatable, Sendable, Identifiable {
         updatedAt: Date? = nil,
         condition: ProviderCondition = .notInstalled,
         message: String = "",
-        accountKey: String? = nil
+        accountKey: String? = nil,
+        attemptedAt: Date? = nil,
+        failureStreak: Int = 0
     ) {
         self.id = id
         self.name = name
@@ -71,6 +77,20 @@ public struct ProviderUsage: Codable, Equatable, Sendable, Identifiable {
         self.condition = condition
         self.message = message
         self.accountKey = accountKey
+        self.attemptedAt = attemptedAt
+        self.failureStreak = failureStreak
+    }
+
+    /// Base interval between automatic attempts after a failure; doubles per failure up to `maximumBackoff`.
+    public static let baseBackoff: TimeInterval = 300
+    public static let maximumBackoff: TimeInterval = 3600
+
+    /// Earliest time an automatic refresh should ask this provider again, or `nil` for right away.
+    public func nextAutomaticAttempt() -> Date? {
+        guard failureStreak > 0, let attemptedAt else { return nil }
+        let exponent = min(failureStreak - 1, 10)
+        let wait = min(Self.maximumBackoff, Self.baseBackoff * pow(2, Double(exponent)))
+        return attemptedAt.addingTimeInterval(wait)
     }
 
     /// Readings older than this, or taken by a failed refresh, must never drive the low-allowance indicator.
@@ -102,6 +122,7 @@ public struct ProviderUsage: Codable, Equatable, Sendable, Identifiable {
         }
         condition = .error
         self.message = message
+        failureStreak = (previous?.failureStreak ?? 0) + 1
     }
 
     public var planLabel: String {
