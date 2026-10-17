@@ -96,9 +96,27 @@ final class RateLimitParsingTests: XCTestCase {
         var profile: [String: Any] = ["emailAddress": "alice", "organizationUuid": "org", "organizationRateLimitTier": "default_claude_max_5x"]
         try write(profile)
         XCTAssertEqual(ClaudePlan.resolve(auth: auth, configDirectory: directory), "max_5x")
+        // A JSON null user tier must fall back to the organization's known tier.
+        profile["userRateLimitTier"] = NSNull()
+        try write(profile)
+        XCTAssertEqual(ClaudePlan.resolve(auth: auth, configDirectory: directory), "max_5x")
+        // Real CLI behavior: subscriptionType can be "pro" for a Max 5× account.
+        var proAuth = auth
+        proAuth.subscriptionType = "pro"
+        XCTAssertEqual(ClaudePlan.resolve(auth: proAuth, configDirectory: directory), "max_5x")
+        var mismatchedPro = proAuth
+        mismatchedPro.email = "someone-else"
+        XCTAssertEqual(ClaudePlan.resolve(auth: mismatchedPro, configDirectory: directory), "pro")
+        var teamAuth = auth
+        teamAuth.subscriptionType = "team"
+        XCTAssertEqual(ClaudePlan.resolve(auth: teamAuth, configDirectory: directory), "team")
+        var signedOut = proAuth
+        signedOut.loggedIn = false
+        XCTAssertEqual(ClaudePlan.resolve(auth: signedOut, configDirectory: directory), "pro")
         profile["userRateLimitTier"] = "default_claude_max_20x"
         try write(profile)
         XCTAssertEqual(ClaudePlan.resolve(auth: auth, configDirectory: directory), "max_20x")
+        XCTAssertEqual(ClaudePlan.resolve(auth: proAuth, configDirectory: directory), "max_20x")
 
         var other = auth
         other.email = "bob"
@@ -109,12 +127,22 @@ final class RateLimitParsingTests: XCTestCase {
 
         profile["userRateLimitTier"] = "unknown-tier"
         try write(profile)
+        XCTAssertEqual(ClaudePlan.resolve(auth: proAuth, configDirectory: directory), "pro")
         XCTAssertEqual(ClaudePlan.resolve(auth: auth, configDirectory: directory), "max")
         try FileManager.default.removeItem(at: directory.appendingPathComponent(".claude.json"))
         XCTAssertEqual(ClaudePlan.resolve(auth: auth, configDirectory: directory), "max")
         var pro = auth
         pro.subscriptionType = "pro"
         XCTAssertEqual(ClaudePlan.resolve(auth: pro, configDirectory: directory), "pro")
+    }
+
+    func testCodexProPriceLabelsAreProviderSpecific() {
+        for (plan, label) in [("prolite", "Pro $100"), ("pro", "Pro $200"), ("promax", "Pro $500")] {
+            let usage = ProviderUsage(id: "codex", name: "Codex", authenticated: true, plan: plan, condition: .ready)
+            XCTAssertEqual(usage.planLabel, label)
+        }
+        let claude = ProviderUsage(id: "claude", name: "Claude Code", authenticated: true, plan: "pro", condition: .ready)
+        XCTAssertEqual(claude.planLabel, "Pro")
     }
 
     func testPlanLabelsAndStaleness() {

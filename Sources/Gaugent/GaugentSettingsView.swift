@@ -21,15 +21,15 @@ struct GaugentSettingsView: View {
                 Picker("Show", selection: $model.menuBarDisplayMode) {
                     ForEach(MenuBarDisplayMode.allCases) { mode in Text(mode.title).tag(mode) }
                 }
-                Toggle("Dim the icon when nothing has been read", isOn: $model.dimIconWhenIdle)
+                Toggle("Dim the icon when no current readings are available", isOn: $model.dimIconWhenIdle)
                 Picker("Appearance", selection: $model.appearance) {
                     ForEach(GaugentAppearance.allCases) { appearance in Text(appearance.title).tag(appearance) }
                 }
             }
             Section("Refresh") {
                 Toggle("Refresh every 5 minutes and when the panel opens", isOn: $model.refreshAutomatically)
-                Stepper("Warn when any window drops to \(model.lowThreshold)%", value: $model.lowThreshold, in: 5...50, step: 5)
-                Text("Stale readings never trigger the warning. A window older than ten minutes, or one whose reset time has passed, is shown dimmed until the tool reports again.")
+                Stepper("Highlight allowances at or below \(model.lowThreshold)%", value: $model.lowThreshold, in: 5...50, step: 5)
+                Text("This changes the visual highlight; it does not send notifications. Stale readings never trigger the highlight. A window older than ten minutes, or one whose reset time has passed, is shown dimmed until the tool reports again.")
                     .font(.system(size: 10.5))
                     .foregroundStyle(.secondary)
             }
@@ -38,6 +38,9 @@ struct GaugentSettingsView: View {
                     get: { model.isLaunchAtLoginEnabled },
                     set: { model.setLaunchAtLogin($0) }
                 ))
+                if let message = model.loginMessage {
+                    Text(message).font(.system(size: 11)).foregroundStyle(.secondary)
+                }
                 LabeledContent("Global shortcut") {
                     Text(model.isGlobalShortcutRegistered ? GlobalShortcutDefinition.showGaugent.label : "Unavailable (in use by another app)")
                         .foregroundStyle(.secondary)
@@ -65,9 +68,12 @@ struct GaugentSettingsView: View {
                                 .lineLimit(1)
                                 .truncationMode(.middle)
                             if let reading {
-                                Text(statusLine(reading))
+                                Text(model.enabledProviders.contains(provider.id) ? reading.connectionStatus : "Disabled")
                                     .font(.system(size: 10.5))
                                     .foregroundStyle(.secondary)
+                            } else {
+                                Text(model.enabledProviders.contains(provider.id) ? "Not checked yet" : "Disabled")
+                                    .font(.system(size: 10.5)).foregroundStyle(.secondary)
                             }
                         }
                     }
@@ -75,22 +81,12 @@ struct GaugentSettingsView: View {
             } header: {
                 Text("Tools")
             } footer: {
-                Text("Each tool is read through its own CLI: Codex via `codex app-server` account RPCs, Claude Code via the `get_usage` control request in a print-mode session with no tools or MCP servers. Grok, Gemini, and other tools can be added the same way.")
+                Text("Enable the tools you want to track. Install and sign in to their CLIs to read subscription allowances. API-key accounts may not report subscription usage.")
                     .font(.system(size: 10.5))
                     .foregroundStyle(.secondary)
             }
         }
         .formStyle(.grouped)
-    }
-
-    private func statusLine(_ reading: ProviderUsage) -> String {
-        switch reading.condition {
-        case .notInstalled: "Not installed"
-        case .signedOut: "Not signed in"
-        case .unsupported: "Signed in · \(reading.message)"
-        case .ready: "Signed in · \(reading.planLabel) · \(reading.windows.count) window\(reading.windows.count == 1 ? "" : "s")"
-        case .error: "Signed in · last refresh failed"
-        }
     }
 
     private var about: some View {
@@ -105,13 +101,22 @@ struct GaugentSettingsView: View {
                 .frame(maxWidth: 320)
             HStack(spacing: 8) {
                 Button("Copy Diagnostics") { model.copyDiagnostics() }.buttonStyle(QuietButtonStyle())
-                Button("Clear Cache") { model.clearCache(); Task { await model.refresh(reason: .user) } }.buttonStyle(QuietButtonStyle())
+                Button("Reset Saved Readings") { model.clearCache() }.buttonStyle(QuietButtonStyle())
                 Button("GitHub") { model.open(URL(string: "https://github.com/shivamx96/gaugent")!) }.buttonStyle(QuietButtonStyle())
             }
             .padding(.top, 4)
+            if let message = model.actionMessage {
+                Text(message).font(.system(size: 11)).foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+            }
+            Text("Read from your tools’ own sessions. No prompts are sent and no tokens are stored. Saved readings contain quota data and hashed account identities.")
+                .font(.system(size: 11)).foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: 380)
             Spacer()
         }
-        .padding(.top, 40)
+        .padding(.horizontal, 20)
+        .padding(.top, 24)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }

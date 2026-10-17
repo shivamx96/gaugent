@@ -75,7 +75,7 @@ public struct ClaudeProvider: UsageProvider {
             guard let rates = payload["rate_limits"] as? [String: Any] else {
                 // The CLI answers from its own usage endpoint; a null here means that fetch was
                 // declined (usually a rate limit) and will likely succeed on a later refresh.
-                fallBack(&usage, previous: previous, auth: auth, message: "Claude Code could not fetch usage right now. It is retried automatically.")
+                fallBack(&usage, previous: previous, auth: auth, message: "Claude Code could not fetch usage right now.")
                 return usage
             }
             usage.windows = ClaudeRateLimits.windows(rates)
@@ -188,17 +188,19 @@ public enum ClaudePlan {
     /// Distinguishes Max 5× from Max 20× using non-secret profile metadata in `.claude.json`.
     ///
     /// The tier is used only when the profile belongs to the account the CLI just reported,
-    /// and unknown tiers stay plain "max".
+    /// and unknown tiers keep the CLI's subscription label. Some CLI versions report
+    /// "pro" even when the matching profile identifies a Max allowance tier.
     public static func resolve(auth: ClaudeAuthentication, configDirectory: URL) -> String {
         let plan = auth.subscriptionType
-        guard plan == "max", let email = auth.email, let orgId = auth.orgId else { return plan }
+        guard auth.loggedIn, ["pro", "max"].contains(plan.lowercased()),
+              let email = auth.email, let orgId = auth.orgId else { return plan }
         let url = configDirectory.appendingPathComponent(".claude.json")
         guard let data = try? Data(contentsOf: url),
               let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let account = object["oauthAccount"] as? [String: Any],
               account["emailAddress"] as? String == email,
               account["organizationUuid"] as? String == orgId else { return plan }
-        let tier = (account["userRateLimitTier"] ?? account["organizationRateLimitTier"]) as? String
+        let tier = (account["userRateLimitTier"] as? String) ?? (account["organizationRateLimitTier"] as? String)
         switch tier {
         case "default_claude_max_5x": return "max_5x"
         case "default_claude_max_20x": return "max_20x"

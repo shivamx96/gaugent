@@ -9,12 +9,12 @@ struct ProviderCard: View {
     private var stale: Bool { model.isStale(provider) }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 7) {
             HStack(alignment: .firstTextBaseline, spacing: 6) {
                 Text(provider.name)
                     .font(.system(size: 12.5, weight: .semibold))
                 Spacer()
-                Text(provider.planLabel)
+                Text(provider.installed ? provider.planLabel : "Not installed")
                     .font(.system(size: 10, weight: .medium))
                     .foregroundStyle(GaugentTheme.secondaryInk(colorScheme))
                     .padding(.horizontal, 6)
@@ -26,18 +26,20 @@ struct ProviderCard: View {
             case .signedOut:
                 guidance(
                     provider.message,
-                    actionTitle: "Open Terminal",
+                    actionTitle: "Copy sign-in command & open Terminal",
                     action: { model.copyAndOpenTerminal(signInCommand) }
                 )
             case .unsupported:
-                guidance(provider.message, actionTitle: nil, action: nil)
+                guidance(provider.message + " Use a subscription account in the CLI, then refresh.", actionTitle: "Sign in with another account", action: { model.copyAndOpenTerminal(signInCommand) })
             case .notInstalled:
-                guidance(provider.message, actionTitle: nil, action: nil)
+                guidance(provider.message, actionTitle: "Installation guide", action: {
+                    model.open(URL(string: provider.id == "codex" ? "https://github.com/openai/codex#installation--setup" : "https://github.com/anthropics/claude-code#installation")!)
+                })
             case .ready, .error:
                 windows
             }
         }
-        .padding(12)
+        .padding(10)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(GaugentTheme.card(colorScheme), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
         .overlay {
@@ -45,7 +47,7 @@ struct ProviderCard: View {
                 .strokeBorder(GaugentTheme.hairline(colorScheme), lineWidth: 0.5)
         }
         .accessibilityElement(children: .contain)
-        .accessibilityLabel(accessibilityLabel)
+        .accessibilityLabel("\(provider.name), \(provider.connectionStatus)")
     }
 
     private var signInCommand: String {
@@ -56,44 +58,56 @@ struct ProviderCard: View {
     private var windows: some View {
         if provider.windows.isEmpty {
             guidance(
-                provider.message.isEmpty ? "No allowance windows were reported." : provider.message,
-                actionTitle: provider.condition == .error ? "Retry" : nil,
+                provider.message.isEmpty ? "No allowance windows were reported. Refresh or check your account in the CLI." : provider.message,
+                actionTitle: provider.condition == .ready ? "Refresh" : nil,
                 action: { Task { await model.refresh(reason: .user) } }
             )
         } else {
-            VStack(alignment: .leading, spacing: 9) {
+            VStack(alignment: .leading, spacing: 7) {
                 ForEach(provider.windows) { window in
                     WindowRow(window: window, stale: stale)
                 }
             }
             if !provider.notes.isEmpty {
                 Text(provider.notes.joined(separator: " · "))
-                    .font(.system(size: 10))
+                    .font(.system(size: 11))
                     .foregroundStyle(GaugentTheme.secondaryInk(colorScheme))
                     .fixedSize(horizontal: false, vertical: true)
             }
             if !provider.message.isEmpty {
                 HStack(alignment: .top, spacing: 5) {
-                    Image(systemName: provider.condition == .error ? "exclamationmark.triangle" : "info.circle")
+                    Image(systemName: provider.condition == .error || provider.limitReached == true ? "exclamationmark.triangle" : "info.circle")
                         .font(.system(size: 9.5, weight: .medium))
-                        .foregroundStyle(provider.condition == .error ? GaugentTheme.warning(colorScheme) : GaugentTheme.tertiaryInk(colorScheme))
+                        .foregroundStyle(provider.condition == .error || provider.limitReached == true ? GaugentTheme.warning(colorScheme) : GaugentTheme.tertiaryInk(colorScheme))
                         .padding(.top, 1)
                     Text(provider.message)
-                        .font(.system(size: 10))
+                        .font(.system(size: 11))
                         .foregroundStyle(GaugentTheme.secondaryInk(colorScheme))
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
-            if !model.ageText(provider).isEmpty {
+        }
+        if !model.ageText(provider).isEmpty || provider.condition == .error {
+            HStack {
                 Text(model.ageText(provider))
-                    .font(.system(size: 9.5))
+                    .font(.system(size: 10.5))
                     .foregroundStyle(GaugentTheme.tertiaryInk(colorScheme))
+                Spacer()
+                if provider.condition == .error || stale {
+                    Button("Retry") { Task { await model.refresh(reason: .user) } }
+                        .buttonStyle(QuietButtonStyle())
+                        .disabled(model.isRefreshing)
+                }
             }
-            if let next = model.nextAttemptText(provider) {
-                Text(next)
-                    .font(.system(size: 9.5))
-                    .foregroundStyle(GaugentTheme.tertiaryInk(colorScheme))
-            }
+        }
+        if let next = model.nextAttemptText(provider) {
+            Text(next)
+                .font(.system(size: 10.5))
+                .foregroundStyle(GaugentTheme.tertiaryInk(colorScheme))
+        } else if !model.refreshAutomatically && (provider.condition == .error || stale) {
+            Text("Automatic refresh is off · ⌘R to retry")
+                .font(.system(size: 10.5))
+                .foregroundStyle(GaugentTheme.tertiaryInk(colorScheme))
         }
     }
 
@@ -104,21 +118,16 @@ struct ProviderCard: View {
                 .foregroundStyle(GaugentTheme.secondaryInk(colorScheme))
                 .fixedSize(horizontal: false, vertical: true)
             if let actionTitle, let action {
-                HStack(spacing: 6) {
+                VStack(alignment: .leading, spacing: 4) {
                     Button(actionTitle, action: action).buttonStyle(QuietButtonStyle())
-                    if provider.condition == .signedOut, !signInCommand.isEmpty {
-                        Text(signInCommand)
+                    if provider.condition == .signedOut || provider.condition == .unsupported, !signInCommand.isEmpty {
+                        Text("Paste in Terminal and press Return:\n\(signInCommand)")
                             .font(.system(size: 10, design: .monospaced))
                             .foregroundStyle(GaugentTheme.tertiaryInk(colorScheme))
                     }
                 }
             }
         }
-    }
-
-    private var accessibilityLabel: String {
-        let parts = provider.windows.map { "\($0.label) \(Int($0.remainingPercent)) percent left" }
-        return "\(provider.name), \(provider.planLabel). " + (parts.isEmpty ? provider.message : parts.joined(separator: ", "))
     }
 }
 
@@ -145,22 +154,29 @@ private struct WindowRow: View {
                     .monospacedDigit()
                     .foregroundStyle(valueColor)
             }
-            GeometryReader { proxy in
-                ZStack(alignment: .leading) {
-                    Capsule().fill(GaugentTheme.track(colorScheme))
-                    if !expired {
-                        Capsule()
-                            .fill(GaugentTheme.level(window.remainingPercent, threshold: threshold, scheme: colorScheme))
-                            .frame(width: max(0, proxy.size.width * window.remainingPercent / 100))
-                            .opacity(stale ? 0.35 : 1)
+            HStack(spacing: 8) {
+                GeometryReader { proxy in
+                    ZStack(alignment: .leading) {
+                        Capsule().fill(GaugentTheme.track(colorScheme))
+                        if !expired {
+                            Capsule()
+                                .fill(GaugentTheme.level(window.remainingPercent, threshold: threshold, scheme: colorScheme))
+                                .frame(width: max(0, proxy.size.width * window.remainingPercent / 100))
+                                .opacity(stale ? 0.35 : 1)
+                        }
                     }
                 }
+                .frame(height: 5)
+                Text(model.resetText(window))
+                    .font(.system(size: 10.5))
+                    .foregroundStyle(GaugentTheme.tertiaryInk(colorScheme))
+                    .fixedSize(horizontal: false, vertical: true)
+                    .layoutPriority(1)
             }
-            .frame(height: 5)
-            Text(model.resetText(window))
-                .font(.system(size: 9.5))
-                .foregroundStyle(GaugentTheme.tertiaryInk(colorScheme))
+
         }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(window.label), \(valueText). \(model.resetText(window))")
     }
 
     private var valueText: String {

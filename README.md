@@ -8,7 +8,9 @@
 gaugent sits in the menu bar and shows the remaining share of each subscription window your
 installed agent CLIs report: the 5-hour session, the weekly limit, per-model weekly limits,
 spend limits, and reset credits. The dial's needle tracks the lowest remaining window, and
-the panel breaks each tool down with reset countdowns.
+the panel names the limiting tool and window and breaks each tool down with reset countdowns.
+Explicit usage or spending blocks appear as a limit warning. The footer reports how many
+tools have current readings; signing in alone does not make a reading current.
 
 ## What it reads
 
@@ -59,5 +61,15 @@ Run the tests with:
 ```sh
 swift test
 ```
+
+Render native light/dark fixtures for normal, stale, blocked, setup, and disabled states without
+reading real CLI accounts:
+
+```sh
+GAUGENT_PREVIEW_DIR=/tmp/gaugent-previews swift test --filter PanelPreviewTests
+```
+
+In Settings, **Reset Saved Readings** clears both the saved cache and in-memory readings,
+then fetches again. The allowance threshold controls visual highlighting, not notifications.
 
 gaugent is prerelease software.

@@ -134,7 +134,7 @@ final class ProviderProcessTests: XCTestCase {
             let declined = provider.read(previous: first)
             XCTAssertEqual(declined.condition, .error)
             XCTAssertEqual(declined.windows, first.windows)
-            XCTAssertTrue(declined.message.contains("retried"))
+            XCTAssertTrue(declined.message.contains("could not fetch usage"))
         }
         withEnvironment(["TEST_RATE_ERROR": "1", "TEST_ACCOUNT": "bob"]) {
             XCTAssertEqual(provider.read(previous: first).windows, [])

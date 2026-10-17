@@ -9,7 +9,7 @@ extension Notification.Name {
 
 @MainActor
 final class GaugentAppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
-    static let panelSize = NSSize(width: 360, height: 468)
+    static let panelSize = NSSize(width: 360, height: 420)
 
     let model = AppModel()
 
@@ -152,12 +152,12 @@ final class GaugentAppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegat
         button.image = GaugentIconRenderer.menuBarIcon(remaining: lowest.map { $0 / 100 })
         button.imagePosition = .imageLeft
         button.font = .monospacedDigitSystemFont(ofSize: 10.5, weight: .medium)
-        button.title = model.menuBarDisplayMode == .glyphAndPercent && lowest != nil ? " \(Int(lowest!.rounded(.down)))%" : ""
-        button.alphaValue = model.dimIconWhenIdle && lowest == nil ? 0.58 : 1
-        button.toolTip = model.isGlobalShortcutRegistered
+        button.title = model.overview.blockedProvider != nil ? " !" : model.menuBarDisplayMode == .glyphAndPercent && lowest != nil ? " \(Int(lowest!.rounded(.down)))%" : ""
+        button.alphaValue = model.dimIconWhenIdle && lowest == nil && model.overview.blockedProvider == nil ? 0.58 : 1
+        button.toolTip = model.headline + " · " + model.overview.statusText + "\n" + (model.isGlobalShortcutRegistered
             ? "gaugent — \(GlobalShortcutDefinition.showGaugent.label)"
-            : "gaugent"
-        button.setAccessibilityLabel(lowest.map { "gaugent, lowest allowance \(Int($0)) percent remaining" } ?? "gaugent, no usage readings")
+            : "gaugent")
+        button.setAccessibilityLabel(model.overview.blockedProvider.map { "gaugent, \($0.name), limit reached" } ?? lowest.map { "gaugent, lowest allowance \(Int($0)) percent remaining. \(model.headline). \(model.overview.statusText)" } ?? "gaugent, no usage readings")
     }
 }
 

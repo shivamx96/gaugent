@@ -6,7 +6,7 @@ import ServiceManagement
 
 @MainActor
 final class AppModel: ObservableObject {
-    static let bundleIdentifier = "com.shivamx96.gaugent"
+    nonisolated static let bundleIdentifier = "com.shivamx96.gaugent"
 
     /// Automatic refreshes and opening the panel reuse a reading younger than this.
     static let ambientRefreshInterval: TimeInterval = 300
@@ -16,6 +16,9 @@ final class AppModel: ObservableObject {
     @Published private(set) var snapshot: UsageSnapshot?
     @Published private(set) var isRefreshing = false
     @Published private(set) var hasLoaded = false
+    @Published var actionMessage: String?
+    @Published private(set) var loginMessage: String?
+    private var cacheGeneration = 0
     @Published private(set) var now = Date()
     @Published private(set) var isLaunchAtLoginEnabled: Bool
     @Published private(set) var isGlobalShortcutRegistered = false
@@ -31,7 +34,9 @@ final class AppModel: ObservableObject {
         didSet { save(enabledProviderIDs, for: Keys.enabledProviderIDs); Task { await refresh(reason: .user) } }
     }
 
-    let collector = UsageCollector.standard
+    let collector: UsageCollector
+    private let defaults: UserDefaults
+    private let storageURL: URL?
 
     private var refreshTimer: AnyCancellable?
     private var clockTimer: AnyCancellable?
@@ -46,45 +51,48 @@ final class AppModel: ObservableObject {
         static let enabledProviderIDs = "enabledProviderIDs"
     }
 
-    init() {
-        let defaults = UserDefaults.standard
+    init(collector: UsageCollector = .standard, defaults: UserDefaults = .standard,
+         storageURL: URL? = AppModel.cacheURL(), startAutomatically: Bool = true) {
+        self.collector = collector
+        self.defaults = defaults
+        self.storageURL = storageURL
         appearance = GaugentAppearance(rawValue: defaults.string(forKey: Keys.appearance) ?? "") ?? .system
         menuBarDisplayMode = MenuBarDisplayMode(rawValue: defaults.string(forKey: Keys.menuBarDisplayMode) ?? "") ?? .glyphAndPercent
         dimIconWhenIdle = defaults.object(forKey: Keys.dimIconWhenIdle) == nil ? true : defaults.bool(forKey: Keys.dimIconWhenIdle)
         refreshAutomatically = defaults.object(forKey: Keys.refreshAutomatically) == nil ? true : defaults.bool(forKey: Keys.refreshAutomatically)
         lowThreshold = defaults.object(forKey: Keys.lowThreshold) == nil ? 20 : defaults.integer(forKey: Keys.lowThreshold)
-        enabledProviderIDs = defaults.stringArray(forKey: Keys.enabledProviderIDs) ?? UsageCollector.standard.providers.map(\.id)
+        enabledProviderIDs = defaults.stringArray(forKey: Keys.enabledProviderIDs) ?? collector.providers.map(\.id)
         isLaunchAtLoginEnabled = SMAppService.mainApp.status == .enabled
 
-        if let cacheURL = Self.cacheURL(), let cached = UsageCache.load(from: cacheURL) {
+        if let cacheURL = storageURL, let cached = UsageCache.load(from: cacheURL) {
             snapshot = cached
         }
-        configureTimers()
-        Task { [weak self] in await self?.refresh(reason: .automatic) }
+        if startAutomatically {
+            configureTimers()
+            Task { [weak self] in await self?.refresh(reason: .automatic) }
+        }
     }
 
     // MARK: Derived state
 
     var enabledProviders: Set<String> { Set(enabledProviderIDs) }
 
-    /// Providers worth a card: enabled and found on this Mac, in configured order.
+    /// Enabled tools, including missing installations so setup actions remain discoverable.
     var visibleProviders: [ProviderUsage] {
-        (snapshot?.providers ?? []).filter { enabledProviders.contains($0.id) && $0.installed }
+        (snapshot?.providers ?? []).filter { enabledProviders.contains($0.id) }
     }
 
     var connectedCount: Int { visibleProviders.filter(\.authenticated).count }
 
-    /// Lowest remaining share among fresh, non-expired windows; stale readings never count.
-    var lowestRemaining: Double? {
-        visibleProviders
-            .filter { !$0.isStale(at: now) }
-            .compactMap { $0.lowestRemaining(at: now) }
-            .min()
-    }
-
+    var overview: UsageOverview { UsageOverview(providers: visibleProviders, now: now) }
+    var lowestRemaining: Double? { overview.lowest?.window.remainingPercent }
     var needsAttention: Bool {
-        guard let lowestRemaining else { return false }
-        return lowestRemaining <= Double(lowThreshold)
+        overview.blockedProvider != nil || (lowestRemaining.map { $0 <= Double(lowThreshold) } ?? false)
+    }
+    var headline: String {
+        if let blocked = overview.blockedProvider { return "\(blocked.name) · limit reached" }
+        if let lowest = overview.lowest { return "\(lowest.provider.name) · \(lowest.window.label)" }
+        return enabledProviders.isEmpty ? "No tools enabled" : "Allowance unavailable"
     }
 
     var lastRefresh: Date? { snapshot?.checkedAt }
@@ -137,14 +145,23 @@ final class AppModel: ObservableObject {
         isRefreshing = true
         defer { isRefreshing = false }
 
+        let generation = cacheGeneration
         let previous = snapshot
         let enabled = enabledProviders
         let collector = collector
         let fresh = await collector.collect(previous: previous, enabled: enabled, userInitiated: reason == .user)
+        guard generation == cacheGeneration else {
+            pendingRefresh = false
+            Task { [weak self] in await self?.refresh(reason: .user) }
+            return
+        }
         snapshot = fresh
         now = Date()
         hasLoaded = true
-        if let cacheURL = Self.cacheURL() {
+        if actionMessage == "Saved readings cleared. Fetching new readings…" {
+            actionMessage = "Saved readings reset. " + overview.statusText + "."
+        }
+        if let cacheURL = storageURL {
             UsageCache.save(fresh, to: cacheURL)
         }
         if pendingRefresh {
@@ -157,7 +174,7 @@ final class AppModel: ObservableObject {
     func nextAttemptText(_ provider: ProviderUsage) -> String? {
         guard let next = provider.nextAutomaticAttempt(), next > now, refreshAutomatically else { return nil }
         let minutes = max(1, Int((next.timeIntervalSince(now) / 60).rounded(.up)))
-        return "Next automatic attempt in \(minutes)m · ⌘R tries now"
+        return "Automatic retry in about \(minutes)m"
     }
 
     private func configureTimers() {
@@ -187,9 +204,13 @@ final class AppModel: ObservableObject {
         do {
             if enabled { try SMAppService.mainApp.register() } else { try SMAppService.mainApp.unregister() }
         } catch {
-            NSSound.beep()
+            loginMessage = "Could not change launch at login. Try again from an installed copy of gaugent. \(error.localizedDescription)"
+            return
         }
         isLaunchAtLoginEnabled = SMAppService.mainApp.status == .enabled
+        loginMessage = SMAppService.mainApp.status == .requiresApproval
+            ? "Allow gaugent in System Settings → General → Login Items."
+            : (isLaunchAtLoginEnabled ? "Launch at login enabled." : "Launch at login disabled.")
     }
 
     func setGlobalShortcutRegistered(_ registered: Bool) {
@@ -197,8 +218,18 @@ final class AppModel: ObservableObject {
     }
 
     func clearCache() {
-        guard let url = Self.cacheURL() else { return }
-        try? FileManager.default.removeItem(at: url)
+        do {
+            if let url = storageURL, FileManager.default.fileExists(atPath: url.path) {
+                try FileManager.default.removeItem(at: url)
+            }
+            cacheGeneration += 1
+            snapshot = nil
+            hasLoaded = false
+            actionMessage = "Saved readings cleared. Fetching new readings…"
+            Task { await refresh(reason: .user) }
+        } catch {
+            actionMessage = "Could not clear saved readings: \(error.localizedDescription)"
+        }
     }
 
     func copyDiagnostics() {
@@ -211,6 +242,7 @@ final class AppModel: ObservableObject {
         }
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(lines.joined(separator: "\n"), forType: .string)
+        actionMessage = "Diagnostics copied."
     }
 
     /// Copies a sign-in command and brings up Terminal so the user can paste it.
@@ -218,14 +250,17 @@ final class AppModel: ObservableObject {
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(command, forType: .string)
         let terminal = URL(fileURLWithPath: "/System/Applications/Utilities/Terminal.app")
-        NSWorkspace.shared.openApplication(at: terminal, configuration: NSWorkspace.OpenConfiguration())
+        actionMessage = "Command copied. Paste it in Terminal, press Return, then refresh after signing in."
+        NSWorkspace.shared.openApplication(at: terminal, configuration: NSWorkspace.OpenConfiguration()) { [weak self] _, error in
+            if error != nil { Task { @MainActor in self?.actionMessage = "Command copied. Open Terminal and paste it to sign in." } }
+        }
     }
 
     func open(_ url: URL) { NSWorkspace.shared.open(url) }
 
-    private func save(_ value: Any, for key: String) { UserDefaults.standard.set(value, forKey: key) }
+    private func save(_ value: Any, for key: String) { defaults.set(value, forKey: key) }
 
-    static func cacheURL() -> URL? {
+    nonisolated static func cacheURL() -> URL? {
         FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first?
             .appendingPathComponent(bundleIdentifier, isDirectory: true)
             .appendingPathComponent("usage.json")

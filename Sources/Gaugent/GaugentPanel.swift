@@ -11,6 +11,7 @@ struct GaugentPanel: View {
     var body: some View {
         VStack(spacing: 0) {
             header
+            summary
             content
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             footer
@@ -35,17 +36,6 @@ struct GaugentPanel: View {
                     .lineLimit(1)
             }
             Spacer(minLength: 6)
-            if let lowest = model.lowestRemaining {
-                Text("\(Int(lowest.rounded(.down)))%")
-                    .font(.system(size: 10.5, weight: .semibold))
-                    .monospacedDigit()
-                    .foregroundStyle(model.needsAttention ? GaugentTheme.warning(colorScheme) : GaugentTheme.accent(colorScheme))
-                    .padding(.horizontal, 6)
-                    .frame(height: 18)
-                    .background(GaugentTheme.selected(colorScheme), in: RoundedRectangle(cornerRadius: 5))
-                    .help("Lowest remaining allowance")
-                    .accessibilityLabel("Lowest remaining allowance \(Int(lowest)) percent")
-            }
             Button {
                 Task { await model.refresh(reason: .user) }
             } label: {
@@ -57,7 +47,7 @@ struct GaugentPanel: View {
             .accessibilityLabel("Refresh")
         }
         .padding(.horizontal, 11)
-        .frame(height: 51)
+        .frame(height: 44)
         .background(GaugentTheme.chrome(colorScheme))
         .overlay(alignment: .bottom) {
             Rectangle().fill(GaugentTheme.hairline(colorScheme)).frame(height: 0.5)
@@ -65,14 +55,38 @@ struct GaugentPanel: View {
     }
 
     private var subtitle: String {
-        if model.isRefreshing { return "Refreshing…" }
+        if model.isRefreshing { return "Checking tools…" }
         if !model.hasLoaded && model.snapshot == nil { return "Checking installed tools…" }
-        let providers = model.visibleProviders
-        if providers.isEmpty { return "No supported tools found" }
-        if model.connectedCount == 0 { return "Nothing signed in" }
-        guard let lastRefresh = model.lastRefresh else { return "Subscription allowance remaining" }
-        let age = model.now.timeIntervalSince(lastRefresh)
-        return age < 60 ? "Updated just now" : "Updated \(Int(age / 60))m ago"
+        guard let lastAttempt = model.visibleProviders.compactMap(\.attemptedAt).max() else { return "Subscription allowance" }
+        let minutes = max(0, Int(model.now.timeIntervalSince(lastAttempt) / 60))
+        return minutes < 1 ? "Checked just now" : "Checked \(minutes)m ago"
+    }
+
+    private var summaryDetail: String {
+        if model.overview.blockedProvider != nil { return "Usage or spending is currently limited" }
+        if model.lowestRemaining != nil { return "Lowest current allowance remaining" }
+        return model.enabledProviders.isEmpty ? "Choose tools in Settings to get started" : "Check tool status below to continue"
+    }
+
+    private var summary: some View {
+        HStack(alignment: .center, spacing: 8) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(model.headline)
+                    .font(.system(size: 11.5, weight: .semibold))
+                    .fixedSize(horizontal: false, vertical: true)
+                Text(summaryDetail)
+                    .font(.system(size: 10.5))
+                    .foregroundStyle(GaugentTheme.secondaryInk(colorScheme))
+            }
+            Spacer(minLength: 4)
+            Text(model.overview.blockedProvider != nil ? "Limited" : model.lowestRemaining.map { "\(Int($0.rounded(.down)))%" } ?? "—")
+                .font(.system(size: 20, weight: .semibold, design: .rounded))
+                .monospacedDigit()
+                .foregroundStyle(model.needsAttention ? GaugentTheme.warning(colorScheme) : GaugentTheme.primaryInk(colorScheme))
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 9)
+        .accessibilityElement(children: .combine)
     }
 
     @ViewBuilder
@@ -83,27 +97,28 @@ struct GaugentPanel: View {
             } else {
                 EmptyStateView(
                     symbol: "gauge.with.dots.needle.33percent",
-                    title: "No supported tools found",
-                    message: "gaugent reads subscription usage from Claude Code and Codex. Install either CLI and refresh.",
-                    actionTitle: "Refresh",
-                    action: { Task { await model.refresh(reason: .user) } }
+                    title: model.enabledProviders.isEmpty ? "No tools enabled" : "Set up your tools",
+                    message: "Enable Claude Code or Codex in Settings to see its subscription allowance.",
+                    actionTitle: "Open Settings",
+                    action: onOpenSettings
                 )
             }
         } else {
             ScrollView {
-                VStack(spacing: 8) {
+                VStack(spacing: 6) {
                     ForEach(model.visibleProviders) { provider in
                         ProviderCard(provider: provider)
                     }
-                    Text("Read from each tool's own CLI session. gaugent never sends a prompt, never stores a token, and keeps only hashed account identities in its cache.")
-                        .font(.system(size: 9.5))
-                        .foregroundStyle(.tertiary)
-                        .multilineTextAlignment(.center)
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 6)
+                    if let message = model.actionMessage {
+                        Text(message)
+                            .font(.system(size: 11))
+                            .foregroundStyle(GaugentTheme.secondaryInk(colorScheme))
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.horizontal, 2)
+                    }
                 }
                 .padding(.horizontal, 10)
-                .padding(.top, 10)
+                .padding(.top, 0)
                 .padding(.bottom, 8)
             }
             .scrollIndicators(.automatic)
@@ -114,18 +129,18 @@ struct GaugentPanel: View {
         HStack(spacing: 6) {
             Circle().fill(statusColor).frame(width: 5, height: 5)
             Text(statusText)
-                .font(.system(size: 9.5))
+                .font(.system(size: 11))
                 .foregroundStyle(GaugentTheme.secondaryInk(colorScheme))
                 .lineLimit(1)
             Spacer()
             Button("Settings", action: onOpenSettings)
                 .buttonStyle(.plain)
-                .font(.system(size: 9.5))
+                .font(.system(size: 11))
                 .foregroundStyle(GaugentTheme.secondaryInk(colorScheme))
                 .keyboardShortcut(",", modifiers: .command)
             Button("Quit", action: onQuit)
                 .buttonStyle(.plain)
-                .font(.system(size: 9.5))
+                .font(.system(size: 11))
                 .foregroundStyle(GaugentTheme.secondaryInk(colorScheme))
         }
         .padding(.horizontal, 10)
@@ -136,16 +151,14 @@ struct GaugentPanel: View {
         }
     }
 
-    private var statusText: String {
-        let total = model.visibleProviders.count
-        if total == 0 { return "no tools detected" }
-        return "\(model.connectedCount) of \(total) tools signed in"
-    }
+    private var statusText: String { model.overview.statusText }
 
     private var statusColor: Color {
         if model.visibleProviders.isEmpty { return GaugentTheme.tertiaryInk(colorScheme) }
-        if model.needsAttention { return GaugentTheme.warning(colorScheme) }
-        return model.connectedCount > 0 ? GaugentTheme.good(colorScheme) : GaugentTheme.warning(colorScheme)
+        if model.needsAttention || model.overview.currentCount < model.visibleProviders.count {
+            return GaugentTheme.warning(colorScheme)
+        }
+        return GaugentTheme.good(colorScheme)
     }
 
     private func handleKeyboardAction(_ action: PanelKeyboardAction) -> Bool {
