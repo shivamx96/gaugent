@@ -28,9 +28,12 @@ struct GaugentSettingsView: View {
     @EnvironmentObject private var model: AppModel
     @Environment(\.colorScheme) private var colorScheme
     @State private var destination: SettingsDestination
+    private let executablePath: (String) -> String?
 
-    init(initialDestination: SettingsDestination = .general) {
+    init(initialDestination: SettingsDestination = .general,
+         executablePath: @escaping (String) -> String? = { ExecutableLocator.locate($0) }) {
         _destination = State(initialValue: initialDestination)
+        self.executablePath = executablePath
     }
 
     var body: some View {
@@ -174,7 +177,7 @@ struct GaugentSettingsView: View {
                 let reading = model.snapshot?.provider(provider.id)
                 let enabled = model.enabledProviders.contains(provider.id)
                 let needsSignIn = reading?.authenticated != true || reading?.condition == .unsupported
-                let path = ExecutableLocator.locate(provider.executableName)
+                let path = executablePath(provider.executableName)
                 SettingsGroup(title: provider.name.uppercased()) {
                     SettingsRow(title: "Show allowance", detail: enabled ? "Included in the panel and menu-bar summary" : "This tool is hidden and will not be refreshed") {
                         settingsToggle("Show \(provider.name) allowance", isOn: Binding(

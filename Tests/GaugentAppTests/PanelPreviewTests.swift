@@ -50,7 +50,9 @@ final class PanelPreviewTests: XCTestCase {
                                  to: output.appendingPathComponent("\(name)-\(appearance.rawValue).png"))
                 if name == "ready" || name == "setup" {
                     for destination in SettingsDestination.allCases {
-                        let settings = GaugentSettingsView(initialDestination: destination).environmentObject(model)
+                        let settings = GaugentSettingsView(initialDestination: destination, executablePath: { name in
+                            readings.first { $0.id == name }?.installed == true ? "/usr/local/bin/\(name)" : nil
+                        }).environmentObject(model)
                             .environment(\.colorScheme, appearance == .dark ? .dark : .light)
                         try await render(settings, size: GaugentSettingsView.size, appearance: appearance,
                                          to: output.appendingPathComponent("settings-\(destination.rawValue.lowercased())-\(name)-\(appearance.rawValue).png"))
