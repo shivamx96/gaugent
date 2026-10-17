@@ -79,6 +79,10 @@ enum GaugentTheme {
         scheme == .dark ? .white.opacity(0.09) : Color(red: 20 / 255, green: 22 / 255, blue: 26 / 255).opacity(0.10)
     }
 
+    static func separator(_ scheme: ColorScheme) -> Color {
+        scheme == .dark ? .white.opacity(0.06) : Color(red: 20 / 255, green: 22 / 255, blue: 26 / 255).opacity(0.06)
+    }
+
     static func hover(_ scheme: ColorScheme) -> Color {
         scheme == .dark ? .white.opacity(0.05) : Color(red: 20 / 255, green: 22 / 255, blue: 26 / 255).opacity(0.045)
     }

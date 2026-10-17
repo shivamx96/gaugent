@@ -98,7 +98,8 @@ final class AppModel: ObservableObject {
     var lastRefresh: Date? { snapshot?.checkedAt }
 
     var applicationVersion: String {
-        let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "1"
+        let build = Bundle.main.bundleIdentifier == Self.bundleIdentifier
+            ? Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "1" : "1"
         return "gaugent \(GaugentVersion.string) (build \(build))"
     }
 
@@ -254,6 +255,13 @@ final class AppModel: ObservableObject {
         NSWorkspace.shared.openApplication(at: terminal, configuration: NSWorkspace.OpenConfiguration()) { [weak self] _, error in
             if error != nil { Task { @MainActor in self?.actionMessage = "Command copied. Open Terminal and paste it to sign in." } }
         }
+    }
+
+    func openInstallationGuide(for providerID: String) {
+        let address = providerID == "codex"
+            ? "https://github.com/openai/codex#installation--setup"
+            : "https://github.com/anthropics/claude-code#installation"
+        open(URL(string: address)!)
     }
 
     func open(_ url: URL) { NSWorkspace.shared.open(url) }

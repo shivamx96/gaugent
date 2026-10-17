@@ -33,7 +33,7 @@ struct ProviderCard: View {
                 guidance(provider.message + " Use a subscription account in the CLI, then refresh.", actionTitle: "Sign in with another account", action: { model.copyAndOpenTerminal(signInCommand) })
             case .notInstalled:
                 guidance(provider.message, actionTitle: "Installation guide", action: {
-                    model.open(URL(string: provider.id == "codex" ? "https://github.com/openai/codex#installation--setup" : "https://github.com/anthropics/claude-code#installation")!)
+                    model.openInstallationGuide(for: provider.id)
                 })
             case .ready, .error:
                 windows

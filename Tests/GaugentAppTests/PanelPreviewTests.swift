@@ -46,25 +46,40 @@ final class PanelPreviewTests: XCTestCase {
                 model.appearance = appearance
                 let view = GaugentPanel(onOpenSettings: {}, onQuit: {}).environmentObject(model)
                     .environment(\.colorScheme, appearance == .dark ? .dark : .light)
-                let host = NSHostingView(rootView: view)
-                let window = NSWindow(contentRect: NSRect(origin: .zero, size: GaugentAppDelegate.panelSize),
-                                      styleMask: [.borderless], backing: .buffered, defer: false)
-                window.isReleasedWhenClosed = false
-                window.contentView = host
-                window.appearance = NSAppearance(named: appearance == .dark ? .darkAqua : .aqua)
-                host.frame = NSRect(origin: .zero, size: GaugentAppDelegate.panelSize)
-                window.orderBack(nil)
-                try await Task.sleep(for: .milliseconds(100))
-                host.layoutSubtreeIfNeeded()
-                host.displayIfNeeded()
-                let bitmap = try XCTUnwrap(host.bitmapImageRepForCachingDisplay(in: host.bounds))
-                host.cacheDisplay(in: host.bounds, to: bitmap)
-                window.orderOut(nil)
-                let png = try XCTUnwrap(bitmap.representation(using: .png, properties: [:]))
-                try png.write(to: output.appendingPathComponent("\(name)-\(appearance.rawValue).png"))
+                try await render(view, size: GaugentAppDelegate.panelSize, appearance: appearance,
+                                 to: output.appendingPathComponent("\(name)-\(appearance.rawValue).png"))
+                if name == "ready" || name == "setup" {
+                    for destination in SettingsDestination.allCases {
+                        let settings = GaugentSettingsView(initialDestination: destination).environmentObject(model)
+                            .environment(\.colorScheme, appearance == .dark ? .dark : .light)
+                        try await render(settings, size: GaugentSettingsView.size, appearance: appearance,
+                                         to: output.appendingPathComponent("settings-\(destination.rawValue.lowercased())-\(name)-\(appearance.rawValue).png"))
+                    }
+                }
             }
         }
     }
+
+    @MainActor
+    private func render<Content: View>(_ view: Content, size: CGSize, appearance: GaugentAppearance, to url: URL) async throws {
+        let host = NSHostingView(rootView: view)
+        let window = NSWindow(contentRect: NSRect(origin: .zero, size: size),
+                              styleMask: [.borderless], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        window.contentView = host
+        window.appearance = NSAppearance(named: appearance == .dark ? .darkAqua : .aqua)
+        host.frame = NSRect(origin: .zero, size: size)
+        window.orderBack(nil)
+        defer { window.orderOut(nil) }
+        try await Task.sleep(for: .milliseconds(100))
+        host.layoutSubtreeIfNeeded()
+        host.displayIfNeeded()
+        let bitmap = try XCTUnwrap(host.bitmapImageRepForCachingDisplay(in: host.bounds))
+        host.cacheDisplay(in: host.bounds, to: bitmap)
+        let png = try XCTUnwrap(bitmap.representation(using: .png, properties: [:]))
+        try png.write(to: url)
+    }
+
 }
 
 private struct FixtureProvider: UsageProvider {

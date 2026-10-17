@@ -124,7 +124,7 @@ final class GaugentAppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegat
         if settingsWindow == nil {
             let controller = NSHostingController(rootView: GaugentSettingsView().environmentObject(model))
             let window = NSWindow(
-                contentRect: NSRect(x: 0, y: 0, width: 520, height: 420),
+                contentRect: NSRect(origin: .zero, size: GaugentSettingsView.size),
                 styleMask: [.titled, .closable, .miniaturizable],
                 backing: .buffered,
                 defer: false

@@ -62,7 +62,12 @@ Run the tests with:
 swift test
 ```
 
-Render native light/dark fixtures for normal, stale, blocked, setup, and disabled states without
+Settings follow the same sidebar and grouped-control layout as gitacre: **General** for appearance,
+refresh and release downloads; **Tools** for provider setup and status; **Advanced** for diagnostics,
+saved readings and support. Use ⌘1–⌘3 to switch settings sections. Updates are installed manually
+from GitHub Releases.
+
+Render native light/dark fixtures for all settings sections and normal, stale, blocked, setup, and disabled panel states without
 reading real CLI accounts:
 
 ```sh
