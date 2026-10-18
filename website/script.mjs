@@ -19,7 +19,7 @@ fetch('https://api.github.com/repos/shivamx96/gaugent/releases?per_page=30', {
     link.removeAttribute('aria-disabled');
     link.removeAttribute('tabindex');
   });
-  document.querySelector('#release-note').textContent = `${release.version}${release.prerelease ? ' · Prerelease' : ''} · Direct DMG download`;
+  document.querySelector('#release-note').textContent = `${release.version.replace(/^v/, '')}${release.prerelease ? ' · Prerelease' : ''} · macOS 14+ · Apple Silicon + Intel`;
 }).catch(() => {
   // Keep any published direct-DMG fallback intact if the API is unavailable.
   // Before the first release, buttons remain visibly unavailable.
