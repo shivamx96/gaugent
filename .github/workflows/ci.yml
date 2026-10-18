@@ -38,3 +38,23 @@ jobs:
       - name: Verify candidate checksum
         working-directory: dist
         run: shasum -a 256 -c gaugent-0.0.0-ci-local.dmg.sha256
+
+  website:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Test release selection
+        run: node --test website/release.test.mjs
+      - name: Build static site container
+        run: docker build -t gaugent-website:ci website
+      - name: Verify website container
+        run: |
+          docker run -d --name website --read-only --tmpfs /tmp --cap-drop ALL --security-opt no-new-privileges -p 127.0.0.1:8080:8080 gaugent-website:ci
+          trap 'docker logs website; docker rm -f website' EXIT
+          curl --retry 10 --retry-connrefused --retry-delay 1 -fsS http://127.0.0.1:8080/healthz
+          curl -fsS http://127.0.0.1:8080/ >/dev/null
+          curl -fsSI http://127.0.0.1:8080/script.mjs | grep -i 'content-type: application/javascript'
+          curl -fsS http://127.0.0.1:8080/appcast.xml >/dev/null
