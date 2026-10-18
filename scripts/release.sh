@@ -23,6 +23,28 @@ skip_notarization=${GAUGENT_SKIP_NOTARIZATION:-0}
 allow_adhoc=${GAUGENT_ALLOW_ADHOC:-0}
 signing_identity=${GAUGENT_SIGNING_IDENTITY:-}
 
+appcast_path=${GAUGENT_APPCAST_PATH:-$repository/website/appcast.xml}
+appcast_url=${GAUGENT_APPCAST_URL:-https://raw.githubusercontent.com/shivamx96/gaugent/main/website/appcast.xml}
+public_key=${GAUGENT_SPARKLE_PUBLIC_KEY:-}
+key_account=${GAUGENT_SPARKLE_KEY_ACCOUNT:-gaugent}
+# A local candidate never changes the public update feed.
+if [[ "$skip_notarization" == "1" ]]; then
+    appcast_url=""
+    public_key=""
+else
+    python3 "$repository/scripts/update-appcast.py" --appcast "$appcast_path" --version "$build_number" --validate-only
+    if [[ -z "$public_key" || "$appcast_url" != https://* ]]; then
+        echo "Set GAUGENT_SPARKLE_PUBLIC_KEY and an HTTPS update feed URL before releasing." >&2
+        exit 1
+    fi
+    swift package --package-path "$repository" resolve
+    actual_key=$("$repository/.build/artifacts/sparkle/Sparkle/bin/generate_keys" --account "$key_account" -p)
+    if [[ "$actual_key" != "$public_key" ]]; then
+        echo "The configured public key does not match the release signing key." >&2
+        exit 1
+    fi
+fi
+
 if [[ -z "$signing_identity" ]]; then
     signing_identity=$(
         security find-identity -v -p codesigning \
@@ -74,6 +96,8 @@ if [[ "$skip_notarization" != "1" ]]; then
     xcrun notarytool history --keychain-profile "$notary_profile" >/dev/null
 fi
 
+GAUGENT_APPCAST_URL="$appcast_url" \
+GAUGENT_SPARKLE_PUBLIC_KEY="$public_key" \
 GAUGENT_VERSION="$marketing_version" \
 GAUGENT_BUILD_NUMBER="$build_number" \
 GAUGENT_RELEASE_LABEL="$release_label" \
@@ -125,3 +149,15 @@ hdiutil verify "$dmg_path"
 )
 
 printf '\nRelease candidate created:\n%s\n%s\n' "$dmg_path" "$checksum_path"
+
+if [[ "$skip_notarization" != "1" ]]; then
+    sign_update="$repository/.build/artifacts/sparkle/Sparkle/bin/sign_update"
+    signature=$("$sign_update" --account "$key_account" -p "$dmg_path")
+    "$sign_update" --account "$key_account" --verify "$dmg_path" "$signature"
+    python3 "$repository/scripts/update-appcast.py" \
+        --appcast "$appcast_path" --version "$build_number" --short-version "$release_label" \
+        --url "https://github.com/shivamx96/gaugent/releases/download/v$release_label/$(basename "$dmg_path")" \
+        --length "$(stat -f %z "$dmg_path")" --signature "$signature" \
+        --release-notes-link "https://github.com/shivamx96/gaugent/releases/tag/v$release_label"
+    echo "Upload and verify release assets before publishing $appcast_path."
+fi

@@ -13,6 +13,15 @@ final class PanelPreviewTests: XCTestCase {
         }
         let output = URL(fileURLWithPath: directory, isDirectory: true)
         try FileManager.default.createDirectory(at: output, withIntermediateDirectories: true)
+        let release = UpdateRelease(displayVersion: "0.2.0", buildVersion: "2", releaseNotesURL: nil, publishedAt: nil)
+        for (name, state) in [("available", UpdateState.available(release)),
+                              ("downloading", .downloading(received: 20, expected: 100)),
+                              ("ready", .readyToInstall(release)), ("failed", .failed("Could not download the update. Try again."))] {
+            let updates = UpdateController(startAutomatically: false, initialState: state)
+            try await render(UpdateSettings().environmentObject(updates).padding(20),
+                             size: CGSize(width: 506, height: 340), appearance: .light,
+                             to: output.appendingPathComponent("updates-\(name).png"))
+        }
         let now = Date()
         func ready(_ id: String, _ name: String, _ remaining: Double) -> ProviderUsage {
             ProviderUsage(id: id, name: name, installed: true, authenticated: true, plan: "pro",
@@ -44,7 +53,7 @@ final class PanelPreviewTests: XCTestCase {
             await model.refresh(reason: .user)
             for appearance in [GaugentAppearance.light, .dark] {
                 model.appearance = appearance
-                let view = GaugentPanel(onOpenSettings: {}, onQuit: {}).environmentObject(model)
+                let view = GaugentPanel(onOpenSettings: {}, onQuit: {}).environmentObject(model).environmentObject(UpdateController(startAutomatically: false))
                     .environment(\.colorScheme, appearance == .dark ? .dark : .light)
                 try await render(view, size: GaugentAppDelegate.panelSize, appearance: appearance,
                                  to: output.appendingPathComponent("\(name)-\(appearance.rawValue).png"))
@@ -52,7 +61,7 @@ final class PanelPreviewTests: XCTestCase {
                     for destination in SettingsDestination.allCases {
                         let settings = GaugentSettingsView(initialDestination: destination, executablePath: { name in
                             readings.first { $0.id == name }?.installed == true ? "/usr/local/bin/\(name)" : nil
-                        }).environmentObject(model)
+                        }).environmentObject(model).environmentObject(UpdateController(startAutomatically: false))
                             .environment(\.colorScheme, appearance == .dark ? .dark : .light)
                         try await render(settings, size: GaugentSettingsView.size, appearance: appearance,
                                          to: output.appendingPathComponent("settings-\(destination.rawValue.lowercased())-\(name)-\(appearance.rawValue).png"))

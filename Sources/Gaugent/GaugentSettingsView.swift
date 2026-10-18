@@ -159,15 +159,7 @@ struct GaugentSettingsView: View {
                         .background(GaugentTheme.surfaceSunk(colorScheme), in: RoundedRectangle(cornerRadius: 5))
                 }
             }
-            SettingsGroup(title: "UPDATES") {
-                SettingsRow(title: "Current version") {
-                    Text(GaugentVersion.string).font(.system(size: 11)).foregroundStyle(.secondary)
-                }
-                SettingsRow(title: "Release downloads", detail: "Install new versions from GitHub Releases") {
-                    Button("View releases") { model.open(URL(string: "https://github.com/shivamx96/gaugent/releases")!) }
-                        .buttonStyle(QuietButtonStyle())
-                }
-            }
+            UpdateSettings()
         }
     }
 
