@@ -126,20 +126,13 @@ enum GaugentTheme {
 }
 
 struct BrandMark: View {
-    @Environment(\.colorScheme) private var colorScheme
     var size: CGFloat = 19
 
     var body: some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: size * 0.225, style: .continuous)
-                .fill(GaugentTheme.accent(colorScheme))
-            GaugeMark(strokeColor: .white.opacity(0.96), lineWidth: max(1.2, size * 0.1), remaining: 0.72)
-                .padding(size * 0.2)
-            RoundedRectangle(cornerRadius: size * 0.225, style: .continuous)
-                .strokeBorder(.white.opacity(0.04), lineWidth: 0.5)
-        }
-        .frame(width: size, height: size)
-        .accessibilityHidden(true)
+        Image(nsImage: BrandArtwork.image(size: size))
+            .resizable()
+            .frame(width: size, height: size)
+            .accessibilityHidden(true)
     }
 }
 

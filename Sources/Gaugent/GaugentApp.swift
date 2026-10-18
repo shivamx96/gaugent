@@ -181,13 +181,7 @@ enum GaugentIconRenderer {
     }
 
     static func applicationIcon() -> NSImage {
-        NSImage(size: NSSize(width: 512, height: 512), flipped: true) { rect in
-            let tile = NSBezierPath(roundedRect: rect.insetBy(dx: 2, dy: 2), xRadius: 115, yRadius: 115)
-            NSColor(red: 24 / 255, green: 124 / 255, blue: 118 / 255, alpha: 1).setFill()
-            tile.fill()
-            drawDial(in: rect.insetBy(dx: 110, dy: 110), color: .white, lineWidth: 30, remaining: 0.72)
-            return true
-        }
+        BrandArtwork.image(size: 512)
     }
 
     static func drawDial(in rect: NSRect, color: NSColor, lineWidth: CGFloat, remaining: Double?) {
