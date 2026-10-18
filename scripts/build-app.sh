@@ -24,6 +24,12 @@ if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
     exit 2
 fi
 
+if [[ ! "$build_number" =~ ^[1-9][0-9]*$ ]]; then
+    echo "GAUGENT_BUILD_NUMBER must be a positive integer." >&2
+    exit 2
+fi
+release_label=${GAUGENT_RELEASE_LABEL:-$version}
+
 declare -a architectures
 if [[ -n "${GAUGENT_ARCHS:-}" ]]; then
     read -r -a architectures <<< "$GAUGENT_ARCHS"
@@ -57,6 +63,8 @@ swift "$repository/scripts/generate-icon.swift" "$app_bundle/Contents/Resources/
 
 /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $version" "$app_bundle/Contents/Info.plist"
 /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $build_number" "$app_bundle/Contents/Info.plist"
+
+/usr/libexec/PlistBuddy -c "Add :GaugentReleaseLabel string $release_label" "$app_bundle/Contents/Info.plist"
 
 if [[ "$signing_identity" == "-" ]]; then
     codesign --force --sign - "$app_bundle" >/dev/null
