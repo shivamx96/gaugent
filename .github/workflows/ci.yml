@@ -43,7 +43,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: '22'
       - name: Test release selection
@@ -54,7 +54,7 @@ jobs:
         run: |
           docker run -d --name website --read-only --tmpfs /tmp --cap-drop ALL --security-opt no-new-privileges -p 127.0.0.1:8080:8080 gaugent-website:ci
           trap 'docker logs website; docker rm -f website' EXIT
-          curl --retry 10 --retry-connrefused --retry-delay 1 -fsS http://127.0.0.1:8080/healthz
+          curl --retry 10 --retry-all-errors --retry-delay 1 -fsS http://127.0.0.1:8080/healthz
           curl -fsS http://127.0.0.1:8080/ >/dev/null
           curl -fsSI http://127.0.0.1:8080/script.mjs | grep -i 'content-type: application/javascript'
           curl -fsS http://127.0.0.1:8080/appcast.xml >/dev/null
