@@ -9,7 +9,7 @@ python3 -m http.server 8080 --directory website
 node --test website/release.test.mjs
 ```
 
-Open http://localhost:8080. Test desktop and narrow layouts, keyboard focus, and release discovery. Published prereleases are eligible. Draft releases, missing DMGs, and `-local.dmg` assets are ignored. The page selects the most recently published eligible release and retains its GitHub Releases link on timeout, rate limiting, or network failure. It never needs a GitHub token.
+Open http://localhost:8080. Test desktop and narrow layouts, keyboard focus, and release discovery. Published prereleases are eligible. Draft releases, missing DMGs, and `-local.dmg` assets are ignored. The page selects the most recently published eligible release and retains its direct-DMG fallback on timeout, rate limiting, or network failure once one has been configured. Before the first public release, Download buttons are visibly unavailable; they never route visitors through a release-list page. It never needs a GitHub token.
 
 **The repository is currently private.** The public API/feed and unauthenticated release downloads therefore do not work yet. Before deploying for public use, make distribution accessible through a public repository or configure public hosting for assets and the feed; update the release URL configuration and site endpoint together. Changing repository visibility is a separate owner decision. Do not embed private-repository tokens in the site or app.
 
@@ -36,3 +36,5 @@ scripts/generate-icons.sh /tmp/gaugent.icns website/assets
 ```
 
 The 16/32px versions omit calibration details for legibility. `assets/favicon.svg` mirrors that small-size geometry as a scalable browser fallback; keep its paths and colors aligned when changing the artwork. The menu-bar status needle remains driven by the current allowance.
+
+After the first public release, set each `.release-link` in `index.html` to the verified DMG URL using `href`, remove `aria-disabled` and `tabindex`, and update `#release-note` with the version. This is the static direct-download fallback, matching Gitacre; refresh it with each website deployment. JavaScript upgrades those links to the newest eligible release when the API is reachable. Keep release notes as a separate footer link.
