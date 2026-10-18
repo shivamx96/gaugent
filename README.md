@@ -78,3 +78,10 @@ In Settings, **Reset Saved Readings** clears both the saved cache and in-memory 
 then fetches again. The allowance threshold controls visual highlighting, not notifications.
 
 gaugent is prerelease software.
+
+## Distribution
+
+CI runs tests and verifies universal app and local DMG packaging. For Developer ID signing,
+notarization, update-feed setup, release acceptance, and publication order, see
+[Releasing gaugent](docs/RELEASING.md). Public release assets must exist before their update-feed
+entry lands on main. Local candidates are marked `-local` and are not public releases.
