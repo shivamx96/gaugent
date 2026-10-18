@@ -27,3 +27,14 @@ jobs:
           for arch in arm64 x86_64; do
             [[ " $architectures " == *" $arch "* ]] || exit 1
           done
+      - name: Test release validation
+        run: python3 -m unittest discover -s Tests
+      - name: Package local release candidate
+        env:
+          GAUGENT_SIGNING_IDENTITY: '-'
+          GAUGENT_ALLOW_ADHOC: '1'
+          GAUGENT_SKIP_NOTARIZATION: '1'
+        run: scripts/release.sh 0.0.0-ci 1
+      - name: Verify candidate checksum
+        working-directory: dist
+        run: shasum -a 256 -c gaugent-0.0.0-ci-local.dmg.sha256
