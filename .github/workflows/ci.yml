@@ -28,7 +28,7 @@ jobs:
             [[ " $architectures " == *" $arch "* ]] || exit 1
           done
       - name: Test release validation
-        run: python3 -m unittest discover -s tests
+        run: python3 -m unittest discover -s Tests
       - name: Package local release candidate
         env:
           GAUGENT_SIGNING_IDENTITY: '-'
