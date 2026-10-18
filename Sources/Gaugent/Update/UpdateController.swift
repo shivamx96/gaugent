@@ -33,7 +33,8 @@ final class UpdateController: ObservableObject {
     private var updater: SPUUpdater?
     private var driver: UpdateDriver?
 
-    init(startAutomatically: Bool = true) {
+    init(startAutomatically: Bool = true, initialState: UpdateState = .idle) {
+        state = initialState
         automaticallyChecksForUpdates = true
         automaticallyDownloadsUpdates = false
 

@@ -13,6 +13,15 @@ final class PanelPreviewTests: XCTestCase {
         }
         let output = URL(fileURLWithPath: directory, isDirectory: true)
         try FileManager.default.createDirectory(at: output, withIntermediateDirectories: true)
+        let release = UpdateRelease(displayVersion: "0.2.0", buildVersion: "2", releaseNotesURL: nil, publishedAt: nil)
+        for (name, state) in [("available", UpdateState.available(release)),
+                              ("downloading", .downloading(received: 20, expected: 100)),
+                              ("ready", .readyToInstall(release)), ("failed", .failed("Could not download the update. Try again."))] {
+            let updates = UpdateController(startAutomatically: false, initialState: state)
+            try await render(UpdateSettings().environmentObject(updates).padding(20),
+                             size: CGSize(width: 506, height: 340), appearance: .light,
+                             to: output.appendingPathComponent("updates-\(name).png"))
+        }
         let now = Date()
         func ready(_ id: String, _ name: String, _ remaining: Double) -> ProviderUsage {
             ProviderUsage(id: id, name: name, installed: true, authenticated: true, plan: "pro",
