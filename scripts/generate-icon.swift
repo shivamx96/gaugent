@@ -62,7 +62,7 @@ for entry in entries {
     needle.lineWidth = lineWidth
     needle.lineCapStyle = .round
     needle.move(to: center)
-    needle.line(to: NSPoint(x: center.x + cos(radians) * radius * 0.78, y: center.y + sin(radians) * radius * 0.78))
+    needle.line(to: NSPoint(x: center.x + CGFloat(Foundation.cos(radians)) * radius * 0.78, y: center.y + CGFloat(Foundation.sin(radians)) * radius * 0.78))
     needle.stroke()
 
     let dot = lineWidth * 0.9
