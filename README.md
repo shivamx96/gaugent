@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="website/assets/logo.png" alt="gaugent app icon" width="112" height="112">
+</p>
+
 <h1 align="center">gaugent</h1>
 
 <p align="center">
