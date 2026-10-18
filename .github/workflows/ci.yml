@@ -1,0 +1,29 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v7
+      - name: Run tests
+        run: swift test
+      - name: Build universal app bundle
+        run: scripts/build-app.sh release
+      - name: Verify both architectures
+        run: |
+          architectures=$(lipo -archs build/gaugent.app/Contents/MacOS/Gaugent)
+          for arch in arm64 x86_64; do
+            [[ " $architectures " == *" $arch "* ]] || exit 1
+          done
