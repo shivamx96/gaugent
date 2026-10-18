@@ -184,7 +184,7 @@ struct GaugeGeometry {
         let degrees = 135 + 270 * clamped
         let radians = degrees * .pi / 180
         let length = radius * 0.78
-        return CGPoint(x: center.x + cos(radians) * length, y: center.y + sin(radians) * length)
+        return CGPoint(x: center.x + CGFloat(Foundation.cos(radians)) * length, y: center.y + CGFloat(Foundation.sin(radians)) * length)
     }
 }
 
