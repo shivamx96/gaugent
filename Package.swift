@@ -11,6 +11,7 @@ let package = Package(
         .library(name: "GaugentCore", targets: ["GaugentCore"]),
         .executable(name: "Gaugent", targets: ["Gaugent"])
     ],
+    dependencies: [.package(url: "https://github.com/sparkle-project/Sparkle", from: "2.8.0")],
     targets: [
         .target(
             name: "GaugentCore",
@@ -18,7 +19,7 @@ let package = Package(
         ),
         .executableTarget(
             name: "Gaugent",
-            dependencies: ["GaugentCore"],
+            dependencies: ["GaugentCore", .product(name: "Sparkle", package: "Sparkle")],
             path: "Sources/Gaugent"
         ),
         .testTarget(name: "GaugentAppTests", dependencies: ["Gaugent", "GaugentCore"]),

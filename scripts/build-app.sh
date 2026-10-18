@@ -66,11 +66,63 @@ swift "$repository/scripts/generate-icon.swift" "$app_bundle/Contents/Resources/
 
 /usr/libexec/PlistBuddy -c "Add :GaugentReleaseLabel string $release_label" "$app_bundle/Contents/Info.plist"
 
-if [[ "$signing_identity" == "-" ]]; then
-    codesign --force --sign - "$app_bundle" >/dev/null
-else
-    codesign --force --options runtime --timestamp --sign "$signing_identity" "$app_bundle" >/dev/null
+appcast_url=${GAUGENT_APPCAST_URL:-}
+public_key=${GAUGENT_SPARKLE_PUBLIC_KEY:-}
+/usr/libexec/PlistBuddy -c "Add :SUFeedURL string $appcast_url" "$app_bundle/Contents/Info.plist"
+/usr/libexec/PlistBuddy -c "Add :SUPublicEDKey string $public_key" "$app_bundle/Contents/Info.plist"
+
+# Sparkle ships as a binary XCFramework. SwiftPM leaves it beside the executable, but a
+# bundle needs it in Contents/Frameworks, and the binary needs an rpath that points there.
+sparkle_framework=$(
+    find "$repository/.build/artifacts" \
+        -type d \
+        -path "*macos-arm64_x86_64/Sparkle.framework" \
+        -print -quit
+)
+
+if [[ -z "$sparkle_framework" ]]; then
+    echo "Sparkle.framework was not found. Run 'swift package resolve' first." >&2
+    exit 1
 fi
-codesign --verify --strict --verbose=2 "$app_bundle"
+
+rm -rf -- "$app_bundle/Contents/Frameworks/Sparkle.framework"
+ditto "$sparkle_framework" "$app_bundle/Contents/Frameworks/Sparkle.framework"
+if ! otool -l "$app_bundle/Contents/MacOS/Gaugent" | grep 'path @executable_path/../Frameworks ' >/dev/null; then
+    install_name_tool -add_rpath "@executable_path/../Frameworks" "$app_bundle/Contents/MacOS/Gaugent"
+fi
+
+# Nested code must be signed before the code that contains it, innermost first.
+# --deep is not a substitute: it cannot apply the hardened runtime per nested bundle.
+declare -a nested_code=(
+    "Contents/Frameworks/Sparkle.framework/Versions/B/XPCServices/Downloader.xpc"
+    "Contents/Frameworks/Sparkle.framework/Versions/B/XPCServices/Installer.xpc"
+    "Contents/Frameworks/Sparkle.framework/Versions/B/Updater.app"
+    "Contents/Frameworks/Sparkle.framework/Versions/B/Autoupdate"
+    "Contents/Frameworks/Sparkle.framework/Versions/B"
+)
+
+sign() {
+    local target=$1
+    if [[ "$signing_identity" == "-" ]]; then
+        codesign --force --sign - "$target" >/dev/null
+    else
+        codesign \
+            --force \
+            --options runtime \
+            --timestamp \
+            --sign "$signing_identity" \
+            "$target" >/dev/null
+    fi
+}
+
+for relative_path in "${nested_code[@]}"; do
+    if [[ -e "$app_bundle/$relative_path" ]]; then
+        sign "$app_bundle/$relative_path"
+    fi
+done
+
+sign "$app_bundle"
+
+codesign --verify --deep --strict --verbose=2 "$app_bundle"
 
 echo "$app_bundle"

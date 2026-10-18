@@ -14,6 +14,7 @@ struct GaugentPanel: View {
             summary
             content
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+            UpdateBanner()
             footer
         }
         .frame(width: GaugentAppDelegate.panelSize.width, height: GaugentAppDelegate.panelSize.height)

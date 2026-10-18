@@ -12,6 +12,7 @@ final class GaugentAppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegat
     static let panelSize = NSSize(width: 360, height: 420)
 
     let model = AppModel()
+    let updates = UpdateController()
 
     private var statusItem: NSStatusItem?
     private let popover = NSPopover()
@@ -44,7 +45,7 @@ final class GaugentAppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegat
                 onOpenSettings: { [weak self] in self?.showSettings() },
                 onQuit: { NSApp.terminate(nil) }
             )
-            .environmentObject(model)
+            .environmentObject(model).environmentObject(updates)
         )
     }
 
@@ -122,7 +123,7 @@ final class GaugentAppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegat
     private func showSettings() {
         closePopover()
         if settingsWindow == nil {
-            let controller = NSHostingController(rootView: GaugentSettingsView().environmentObject(model))
+            let controller = NSHostingController(rootView: GaugentSettingsView().environmentObject(model).environmentObject(updates))
             let window = NSWindow(
                 contentRect: NSRect(origin: .zero, size: GaugentSettingsView.size),
                 styleMask: [.titled, .closable, .miniaturizable],

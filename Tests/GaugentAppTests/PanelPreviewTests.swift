@@ -44,7 +44,7 @@ final class PanelPreviewTests: XCTestCase {
             await model.refresh(reason: .user)
             for appearance in [GaugentAppearance.light, .dark] {
                 model.appearance = appearance
-                let view = GaugentPanel(onOpenSettings: {}, onQuit: {}).environmentObject(model)
+                let view = GaugentPanel(onOpenSettings: {}, onQuit: {}).environmentObject(model).environmentObject(UpdateController(startAutomatically: false))
                     .environment(\.colorScheme, appearance == .dark ? .dark : .light)
                 try await render(view, size: GaugentAppDelegate.panelSize, appearance: appearance,
                                  to: output.appendingPathComponent("\(name)-\(appearance.rawValue).png"))
@@ -52,7 +52,7 @@ final class PanelPreviewTests: XCTestCase {
                     for destination in SettingsDestination.allCases {
                         let settings = GaugentSettingsView(initialDestination: destination, executablePath: { name in
                             readings.first { $0.id == name }?.installed == true ? "/usr/local/bin/\(name)" : nil
-                        }).environmentObject(model)
+                        }).environmentObject(model).environmentObject(UpdateController(startAutomatically: false))
                             .environment(\.colorScheme, appearance == .dark ? .dark : .light)
                         try await render(settings, size: GaugentSettingsView.size, appearance: appearance,
                                          to: output.appendingPathComponent("settings-\(destination.rawValue.lowercased())-\(name)-\(appearance.rawValue).png"))
