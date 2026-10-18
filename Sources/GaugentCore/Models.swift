@@ -48,6 +48,8 @@ public struct ProviderUsage: Codable, Equatable, Sendable, Identifiable {
     public var accountKey: String?
     /// When the provider was last asked, successful or not.
     public var attemptedAt: Date?
+    /// Explicit provider block; optional for compatibility with older cached readings.
+    public var limitReached: Bool?
     /// Consecutive refreshes whose live read failed; drives the automatic backoff.
     public var failureStreak: Int
 
@@ -64,7 +66,8 @@ public struct ProviderUsage: Codable, Equatable, Sendable, Identifiable {
         message: String = "",
         accountKey: String? = nil,
         attemptedAt: Date? = nil,
-        failureStreak: Int = 0
+        failureStreak: Int = 0,
+        limitReached: Bool? = nil
     ) {
         self.id = id
         self.name = name
@@ -79,6 +82,7 @@ public struct ProviderUsage: Codable, Equatable, Sendable, Identifiable {
         self.accountKey = accountKey
         self.attemptedAt = attemptedAt
         self.failureStreak = failureStreak
+        self.limitReached = limitReached
     }
 
     /// Base interval between automatic attempts after a failure; doubles per failure up to `maximumBackoff`.
@@ -129,8 +133,13 @@ public struct ProviderUsage: Codable, Equatable, Sendable, Identifiable {
         if !authenticated {
             return condition == .error ? "Unavailable" : "Not signed in"
         }
+        if id == "codex" {
+            // Codex account/read uses internal IDs for the three ChatGPT Pro tiers.
+            let proTiers = ["prolite": "Pro $100", "pro": "Pro $200", "promax": "Pro $500"]
+            if let label = proTiers[plan.lowercased()] { return label }
+        }
         let names = [
-            "prolite": "Pro Lite", "pro": "Pro", "plus": "Plus", "max": "Max",
+            "pro": "Pro", "plus": "Plus", "max": "Max",
             "max_5x": "Max 5×", "max_20x": "Max 20×", "free": "Free", "team": "Team",
             "business": "Business", "enterprise": "Enterprise", "edu": "Edu"
         ]
@@ -197,4 +206,48 @@ public func resetDate(_ value: Any?) -> Date? {
 public func usageWindow(label: String, usedPercent: Any?, resetsAt: Any?) -> UsageWindow? {
     guard let used = finiteNumber(usedPercent), used >= 0 else { return nil }
     return UsageWindow(label: label, remainingPercent: max(0, 100 - used), resetsAt: resetDate(resetsAt))
+}
+
+/// Shared presentation state: authentication alone does not imply usable quota data.
+public struct UsageOverview {
+    public let providers: [ProviderUsage]
+    public let now: Date
+
+    public init(providers: [ProviderUsage], now: Date = Date()) {
+        self.providers = providers
+        self.now = now
+    }
+
+    public var blockedProvider: ProviderUsage? {
+        providers.first { !$0.isStale(at: now) && $0.limitReached == true }
+    }
+
+    public var lowest: (provider: ProviderUsage, window: UsageWindow)? {
+        providers.filter { !$0.isStale(at: now) }
+            .flatMap { provider in provider.liveWindows(at: now).map { (provider: provider, window: $0) } }
+            .min { $0.window.remainingPercent < $1.window.remainingPercent }
+    }
+
+    public var currentCount: Int {
+        providers.filter { !$0.isStale(at: now) && !$0.liveWindows(at: now).isEmpty }.count
+    }
+
+    public var statusText: String {
+        if providers.isEmpty { return "No tools enabled" }
+        if let blockedProvider { return "\(blockedProvider.name) · limit reached" }
+        if currentCount == 0 { return "No current readings" }
+        return "\(currentCount) of \(providers.count) tools current"
+    }
+}
+
+public extension ProviderUsage {
+    var connectionStatus: String {
+        switch condition {
+        case .notInstalled: return "Not installed"
+        case .signedOut: return "Not signed in"
+        case .unsupported: return "Allowance unavailable for this account"
+        case .ready: return limitReached == true ? "Limit reached" : "\(planLabel) · \(windows.count) allowance windows"
+        case .error: return authenticated ? "Signed in · refresh failed" : "Connection failed · sign-in status unknown"
+        }
+    }
 }

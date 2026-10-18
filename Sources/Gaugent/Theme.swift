@@ -22,7 +22,7 @@ enum MenuBarDisplayMode: String, CaseIterable, Identifiable {
     case glyphAndPercent
 
     var id: Self { self }
-    var title: String { self == .glyph ? "Glyph" : "Glyph + lowest remaining" }
+    var title: String { self == .glyph ? "Icon" : "Icon + lowest remaining" }
 }
 
 enum GaugentTheme {
@@ -71,12 +71,16 @@ enum GaugentTheme {
 
     static func tertiaryInk(_ scheme: ColorScheme) -> Color {
         scheme == .dark
-            ? Color(red: 113 / 255, green: 118 / 255, blue: 126 / 255)
-            : Color(red: 140 / 255, green: 145 / 255, blue: 153 / 255)
+            ? Color(red: 155 / 255, green: 160 / 255, blue: 168 / 255)
+            : Color(red: 101 / 255, green: 106 / 255, blue: 114 / 255)
     }
 
     static func hairline(_ scheme: ColorScheme) -> Color {
         scheme == .dark ? .white.opacity(0.09) : Color(red: 20 / 255, green: 22 / 255, blue: 26 / 255).opacity(0.10)
+    }
+
+    static func separator(_ scheme: ColorScheme) -> Color {
+        scheme == .dark ? .white.opacity(0.06) : Color(red: 20 / 255, green: 22 / 255, blue: 26 / 255).opacity(0.06)
     }
 
     static func hover(_ scheme: ColorScheme) -> Color {

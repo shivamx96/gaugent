@@ -21,6 +21,7 @@ let package = Package(
             dependencies: ["GaugentCore"],
             path: "Sources/Gaugent"
         ),
+        .testTarget(name: "GaugentAppTests", dependencies: ["Gaugent", "GaugentCore"]),
         .testTarget(
             name: "GaugentCoreTests",
             dependencies: ["GaugentCore"],

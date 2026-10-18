@@ -52,6 +52,7 @@ public struct CodexProvider: UsageProvider {
             }
             let payload = try rpc.request("account/rateLimits/read")
             let reading = CodexRateLimits.parse(payload)
+            usage.limitReached = reading.limitReached
             usage.windows = reading.windows
             usage.notes = reading.notes
             usage.updatedAt = Date()
@@ -147,6 +148,7 @@ public enum CodexRateLimits {
 
 public enum GaugentVersion {
     public static var string: String {
-        Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0.1.0"
+        guard Bundle.main.bundleIdentifier == "com.shivamx96.gaugent" else { return "0.1.0" }
+        return Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0.1.0"
     }
 }
