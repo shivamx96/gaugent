@@ -26,3 +26,13 @@ Or run `docker compose -f website/compose.yaml up --build -d`. Set `PORT` to cho
 The container includes `appcast.xml`, but released apps default to the raw GitHub feed. Website deployment does not publish that GitHub feed; merging the feed PR does. Keep the configured feed URL alive for installed apps. See [the release runbook](../docs/RELEASING.md).
 
 The site has not been publicly deployed by this change. Update screenshots through `GAUGENT_PREVIEW_DIR=/tmp/gaugent-previews swift test --filter PanelPreviewTests`, copying fixture renders only. Never publish screenshots containing real account details.
+
+## Brand assets
+
+The native app, ICNS bundle, website logo, and PNG favicons share `Sources/Gaugent/BrandArtwork.swift`. Regenerate with:
+
+```sh
+scripts/generate-icons.sh /tmp/gaugent.icns website/assets
+```
+
+The 16/32px versions omit calibration details for legibility. `assets/favicon.svg` mirrors that small-size geometry as a scalable browser fallback; keep its paths and colors aligned when changing the artwork. The menu-bar status needle remains driven by the current allowance.

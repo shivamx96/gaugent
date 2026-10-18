@@ -59,7 +59,7 @@ rm -rf -- "$app_bundle"
 mkdir -p "$app_bundle/Contents/MacOS" "$app_bundle/Contents/Resources"
 cp "$source_plist" "$app_bundle/Contents/Info.plist"
 cp "$binary_directory/Gaugent" "$app_bundle/Contents/MacOS/Gaugent"
-swift "$repository/scripts/generate-icon.swift" "$app_bundle/Contents/Resources/AppIcon.icns"
+"$repository/scripts/generate-icons.sh" "$app_bundle/Contents/Resources/AppIcon.icns"
 
 /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $version" "$app_bundle/Contents/Info.plist"
 /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $build_number" "$app_bundle/Contents/Info.plist"
