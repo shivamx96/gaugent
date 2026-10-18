@@ -15,7 +15,8 @@ fetch('https://api.github.com/repos/shivamx96/gaugent/releases?per_page=30', {
   }
   document.querySelectorAll('.release-link').forEach(link => {
     link.href = release.url;
-    link.textContent = link.dataset.downloadLabel || 'Download for macOS ↓';
+    const label = link.querySelector('[data-release-label]') || link;
+    label.textContent = link.dataset.downloadLabel || 'Download for macOS';
     link.removeAttribute('aria-disabled');
     link.removeAttribute('tabindex');
   });
@@ -24,3 +25,5 @@ fetch('https://api.github.com/repos/shivamx96/gaugent/releases?per_page=30', {
   // Keep any published direct-DMG fallback intact if the API is unavailable.
   // Before the first release, buttons remain visibly unavailable.
 });
+
+document.querySelector('#year').textContent = new Date().getFullYear();
