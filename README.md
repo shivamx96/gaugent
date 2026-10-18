@@ -90,10 +90,3 @@ reading real CLI accounts:
 ```sh
 GAUGENT_PREVIEW_DIR=/tmp/gaugent-previews swift test --filter PanelPreviewTests
 ```
-
-## Distribution
-
-CI runs tests and verifies universal app packaging, local DMGs, and the website container. For Developer ID signing,
-notarization, update-feed setup, release acceptance, and publication order, see
-[Releasing gaugent](docs/RELEASING.md). Public release assets must exist before their update-feed
-entry lands on main. Local candidates are marked `-local` and are not public releases.
