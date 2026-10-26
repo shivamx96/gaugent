@@ -178,7 +178,7 @@ public enum AccountIdentity {
     }
 }
 
-/// Finite, non-negative numbers only. Booleans and NaN are not allowances.
+/// Finite numbers only. Callers apply their field's sign and range constraints.
 public func finiteNumber(_ value: Any?) -> Double? {
     if let number = value as? NSNumber {
         guard CFGetTypeID(number) != CFBooleanGetTypeID() else { return nil }
@@ -189,7 +189,7 @@ public func finiteNumber(_ value: Any?) -> Double? {
 }
 
 public func resetDate(_ value: Any?) -> Date? {
-    if let seconds = finiteNumber(value), seconds > 0 {
+    if let seconds = finiteNumber(value), seconds > 0, seconds <= Date.distantFuture.timeIntervalSince1970 {
         return Date(timeIntervalSince1970: seconds)
     }
     if let text = value as? String {

@@ -3,6 +3,22 @@ import XCTest
 @testable import GaugentCore
 
 final class RateLimitParsingTests: XCTestCase {
+    func testOutOfRangeNumbersDoNotTrapOrProduceMisleadingLabels() {
+        for value in [1e100, Double(Int.max), Double.infinity, Double.nan, -1] {
+            let reading = CodexRateLimits.parse(["rateLimitResetCredits": ["availableCount": value]])
+            XCTAssertTrue(reading.notes.isEmpty)
+            XCTAssertEqual(CodexRateLimits.durationLabel(minutes: value, fallback: "Primary"), "Primary")
+            XCTAssertEqual(ClaudeRateLimits.notes(["extra_usage": ["is_enabled": true,
+                "used_credits": value, "monthly_limit": value]]), ["Extra usage on"])
+            XCTAssertNil(resetDate(value))
+        }
+        XCTAssertTrue(CodexRateLimits.parse(["rateLimitResetCredits": ["availableCount": 1.5]]).notes.isEmpty)
+        XCTAssertEqual(CodexRateLimits.durationLabel(minutes: 1.5, fallback: "Primary"), "1.5-minute")
+        XCTAssertEqual(CodexRateLimits.parse(["rateLimitResetCredits": ["availableCount": 1]]).notes,
+                       ["1 full reset available"])
+        XCTAssertEqual(resetDate(Date.distantFuture.timeIntervalSince1970), Date.distantFuture)
+    }
+
     func testCodexWindowsKeepZeroMissingDurationAndMultipleBuckets() {
         let reading = CodexRateLimits.parse(["rateLimitsByLimitId": [
             "codex": ["primary": ["usedPercent": 100, "windowDurationMins": 10080, "resetsAt": 10]],

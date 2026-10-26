@@ -109,7 +109,9 @@ final class AppModel: ObservableObject {
 
     func resetText(_ window: UsageWindow) -> String {
         guard let resetsAt = window.resetsAt else { return "Reset time unavailable" }
-        let minutes = Int((resetsAt.timeIntervalSince(now) / 60).rounded(.up))
+        guard let minutes = Int(exactly: (resetsAt.timeIntervalSince(now) / 60).rounded(.up)) else {
+            return "Reset time unavailable"
+        }
         if minutes <= 0 { return "Reset time passed · awaiting an update" }
         if minutes < 60 { return "Resets in \(minutes)m" }
         if minutes < 1440 { return "Resets in \(minutes / 60)h \(minutes % 60)m" }
@@ -118,7 +120,10 @@ final class AppModel: ObservableObject {
 
     func ageText(_ provider: ProviderUsage) -> String {
         guard let updatedAt = provider.updatedAt else { return "" }
-        let minutes = max(0, Int(now.timeIntervalSince(updatedAt) / 60))
+        guard let elapsed = Int(exactly: (now.timeIntervalSince(updatedAt) / 60).rounded(.towardZero)) else {
+            return "Reading time unavailable"
+        }
+        let minutes = max(0, elapsed)
         let when = minutes < 1 ? "just now" : minutes < 60 ? "\(minutes)m ago" : "\(minutes / 60)h ago"
         return (isStale(provider) ? "Last reported " : "Updated ") + when
     }
@@ -174,7 +179,8 @@ final class AppModel: ObservableObject {
     /// Text for a provider that is waiting out a backoff, or `nil`.
     func nextAttemptText(_ provider: ProviderUsage) -> String? {
         guard let next = provider.nextAutomaticAttempt(), next > now, refreshAutomatically else { return nil }
-        let minutes = max(1, Int((next.timeIntervalSince(now) / 60).rounded(.up)))
+        guard let remaining = Int(exactly: (next.timeIntervalSince(now) / 60).rounded(.up)) else { return nil }
+        let minutes = max(1, remaining)
         return "Automatic retry in about \(minutes)m"
     }
 

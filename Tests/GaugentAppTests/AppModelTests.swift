@@ -4,6 +4,21 @@ import GaugentCore
 
 final class AppModelTests: XCTestCase {
     @MainActor
+    func testUnrepresentableCachedDatesHaveSafePresentation() {
+        let model = AppModel(collector: UsageCollector(providers: []),
+            defaults: UserDefaults(suiteName: UUID().uuidString)!, storageURL: nil, startAutomatically: false)
+        for seconds in [1e100, -1e100, Double.infinity, Double.nan] {
+            let date = Date(timeIntervalSince1970: seconds)
+            XCTAssertEqual(model.resetText(UsageWindow(label: "Test", remainingPercent: 50, resetsAt: date)),
+                           "Reset time unavailable")
+            let reading = ProviderUsage(id: "test", name: "Test", updatedAt: date, condition: .error,
+                                        attemptedAt: date, failureStreak: 1)
+            XCTAssertEqual(model.ageText(reading), "Reading time unavailable")
+            XCTAssertNil(model.nextAttemptText(reading))
+        }
+    }
+
+    @MainActor
     func testUnavailableAndDisabledToolsHaveDifferentStates() async {
         let defaults = UserDefaults(suiteName: UUID().uuidString)!
         let model = AppModel(collector: UsageCollector(providers: [FailingProvider()]), defaults: defaults,

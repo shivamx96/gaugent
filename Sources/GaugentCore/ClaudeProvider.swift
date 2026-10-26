@@ -175,12 +175,13 @@ public struct ClaudeUsageSnapshot {
               account["organizationUuid"] as? String == orgId,
               let cached = object["cachedUsageUtilization"] as? [String: Any],
               let rates = cached["utilization"] as? [String: Any],
-              let fetchedAtMs = finiteNumber(cached["fetchedAtMs"]), fetchedAtMs > 0 else { return nil }
+              let fetchedAtMs = finiteNumber(cached["fetchedAtMs"]),
+              let fetchedAt = resetDate(fetchedAtMs / 1000) else { return nil }
         if let cachedAccount = cached["accountUuid"] as? String, let profileAccount = account["accountUuid"] as? String,
            cachedAccount != profileAccount {
             return nil
         }
-        return ClaudeUsageSnapshot(rates: rates, fetchedAt: Date(timeIntervalSince1970: fetchedAtMs / 1000))
+        return ClaudeUsageSnapshot(rates: rates, fetchedAt: fetchedAt)
     }
 }
 
@@ -251,8 +252,8 @@ public enum ClaudeRateLimits {
 
     public static func notes(_ rates: [String: Any]) -> [String] {
         guard let extra = rates["extra_usage"] as? [String: Any], extra["is_enabled"] as? Bool == true else { return [] }
-        let used = finiteNumber(extra["used_credits"])
-        let limit = finiteNumber(extra["monthly_limit"])
+        let used = currencyAmount(extra["used_credits"])
+        let limit = currencyAmount(extra["monthly_limit"])
         switch (used, limit) {
         case let (used?, limit?) where limit > 0:
             return ["Extra usage on · \(currency(used)) of \(currency(limit)) this month"]
@@ -264,6 +265,11 @@ public enum ClaudeRateLimits {
     }
 
     private static func currency(_ value: Double) -> String {
-        value == value.rounded() ? "$\(Int(value))" : String(format: "$%.2f", value)
+        Int(exactly: value).map { "$\($0)" } ?? String(format: "$%.2f", value)
+    }
+
+    private static func currencyAmount(_ value: Any?) -> Double? {
+        guard let amount = finiteNumber(value), amount >= 0, amount < Double(Int.max) else { return nil }
+        return amount
     }
 }
