@@ -1,3 +1,4 @@
+import Darwin
 import Foundation
 
 public enum LineProcessError: Error, Equatable {
@@ -14,18 +15,17 @@ public enum LineProcessError: Error, Equatable {
 /// user turn, and terminates the child as soon as it has what it needs. The deadline spans
 /// the whole conversation so a chatty or hung child cannot keep a refresh alive forever.
 public final class LineProcessClient: @unchecked Sendable {
-    private static let maximumBufferSize = 8 * 1024 * 1024
-    private static let terminationGracePeriod: TimeInterval = 2
-
     private let process = Process()
     private let input = Pipe()
     private let output = Pipe()
-    private let lock = NSCondition()
-    private var buffer = Data()
-    private var closed = false
-    private let timeout: TimeInterval
+    private let deadlineLock = NSLock()
     private var deadline = Date.distantFuture
+    private let timeout: TimeInterval
+    private var buffer = Data()
+    private var consumed = 0
+    private var scanned = 0
 
+    // One caller owns start/send/receive/terminate. Only expireDeadline may run concurrently.
     public init(executable: String, arguments: [String], currentDirectory: URL, timeout: TimeInterval = 15) {
         process.executableURL = URL(fileURLWithPath: executable)
         process.arguments = arguments
@@ -41,90 +41,102 @@ public final class LineProcessClient: @unchecked Sendable {
     public var isRunning: Bool { process.isRunning }
 
     public func start() throws {
-        output.fileHandleForReading.readabilityHandler = { [weak self] handle in
-            guard let self else { return }
-            let data = handle.availableData
-            self.lock.lock()
-            if data.isEmpty {
-                self.closed = true
-                handle.readabilityHandler = nil
-            } else {
-                self.buffer.append(data)
-            }
-            self.lock.broadcast()
-            self.lock.unlock()
-        }
-        process.terminationHandler = { [weak self] _ in
-            guard let self else { return }
-            self.lock.lock()
-            self.closed = true
-            self.lock.broadcast()
-            self.lock.unlock()
-        }
+        deadlineLock.lock()
+        deadline = Date().addingTimeInterval(timeout)
+        deadlineLock.unlock()
         do {
+            try ProcessIO.configure(output.fileHandleForReading)
+            try ProcessIO.configure(input.fileHandleForWriting, writing: true)
             try process.run()
         } catch {
-            output.fileHandleForReading.readabilityHandler = nil
             throw LineProcessError.launchFailed(error.localizedDescription)
         }
-        deadline = Date().addingTimeInterval(timeout)
     }
 
-    /// Lets tests shorten the remaining time without restarting the child.
     public func expireDeadline() {
-        lock.lock()
+        deadlineLock.lock()
         deadline = .distantPast
-        lock.broadcast()
-        lock.unlock()
+        deadlineLock.unlock()
+    }
+
+    private func checkDeadline() throws {
+        deadlineLock.lock()
+        let expired = Date() >= deadline
+        deadlineLock.unlock()
+        if expired { throw LineProcessError.timedOut }
     }
 
     public func send(_ message: [String: Any]) throws {
+        try checkDeadline()
         var data = try JSONSerialization.data(withJSONObject: message)
         data.append(0x0A)
-        do {
-            try input.fileHandleForWriting.write(contentsOf: data)
-        } catch {
-            throw LineProcessError.disconnected
+        guard data.count <= ProcessIO.maximumOutputSize else { throw LineProcessError.responseTooLarge }
+        var sent = 0
+        while sent < data.count {
+            try checkDeadline()
+            let count = data.withUnsafeBytes { bytes in
+                Darwin.write(input.fileHandleForWriting.fileDescriptor, bytes.baseAddress!.advanced(by: sent), data.count - sent)
+            }
+            if count > 0 { sent += count }
+            else if count < 0 && (errno == EAGAIN || errno == EINTR) {
+                ProcessIO.wait([input.fileHandleForWriting], writing: true)
+            } else { throw LineProcessError.disconnected }
         }
     }
 
-    /// Returns the first complete JSON object line accepted by `matches`; other lines are dropped.
+    /// Returns the first matching JSON object. Bounds are checked before parsing each line.
     public func receive(where matches: ([String: Any]) -> Bool) throws -> [String: Any] {
-        lock.lock()
-        defer { lock.unlock() }
         while true {
-            while let line = takeLine() {
+            try checkDeadline()
+            if let line = takeLine() {
                 guard !line.isEmpty,
                       let object = try? JSONSerialization.jsonObject(with: line) as? [String: Any] else { continue }
-                if matches(object) { return object }
+                try checkDeadline()
+                let accepted = matches(object)
+                try checkDeadline()
+                if accepted { return object }
+                continue
             }
-            if buffer.count > Self.maximumBufferSize { throw LineProcessError.responseTooLarge }
-            if closed { throw LineProcessError.disconnected }
-            guard Date() < deadline else { throw LineProcessError.timedOut }
-            lock.wait(until: deadline)
+            guard let data = try ProcessIO.read(output.fileHandleForReading) else {
+                ProcessIO.wait([output.fileHandleForReading])
+                continue
+            }
+            if data.isEmpty { throw LineProcessError.disconnected }
+            guard data.count <= ProcessIO.maximumOutputSize - (buffer.count - consumed) else {
+                throw LineProcessError.responseTooLarge
+            }
+            compactBufferIfNeeded()
+            buffer.append(data)
         }
     }
 
     private func takeLine() -> Data? {
-        guard let newline = buffer.firstIndex(of: 0x0A) else { return nil }
-        let line = buffer.subdata(in: buffer.startIndex..<newline)
-        buffer = Data(buffer[buffer.index(after: newline)...])
+        guard let newline = buffer[scanned...].firstIndex(of: 0x0A) else {
+            scanned = buffer.count
+            return nil
+        }
+        let line = buffer.subdata(in: consumed..<newline)
+        consumed = newline + 1
+        scanned = consumed
         return line
     }
 
+    private func compactBufferIfNeeded() {
+        // Compact in batches, not once per line; scan each byte only once.
+        guard consumed > 0 else { return }
+        if consumed == buffer.count {
+            buffer.removeAll(keepingCapacity: true)
+        } else {
+            buffer = Data(buffer[consumed...])
+        }
+        scanned -= consumed
+        consumed = 0
+    }
+
     public func terminate() {
-        output.fileHandleForReading.readabilityHandler = nil
         try? input.fileHandleForWriting.close()
-        guard process.isRunning else { return }
-        process.terminate()
-        let limit = Date().addingTimeInterval(Self.terminationGracePeriod)
-        while process.isRunning && Date() < limit {
-            Thread.sleep(forTimeInterval: 0.02)
-        }
-        if process.isRunning {
-            kill(process.processIdentifier, SIGKILL)
-        }
-        process.waitUntilExit()
+        ProcessIO.terminate(process)
+        try? output.fileHandleForReading.close()
     }
 }
 
