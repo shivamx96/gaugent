@@ -5,6 +5,15 @@
         <description>Verified gaugent updates</description>
         <link>https://github.com/shivamx96/gaugent</link>
         <item>
+            <title>0.1.1</title>
+            <sparkle:version>2</sparkle:version>
+            <sparkle:shortVersionString>0.1.1</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+            <pubDate>Mon, 26 Oct 2026 08:36:24 +0000</pubDate>
+            <sparkle:fullReleaseNotesLink>https://github.com/shivamx96/gaugent/releases/tag/v0.1.1</sparkle:fullReleaseNotesLink>
+            <enclosure url="https://github.com/shivamx96/gaugent/releases/download/v0.1.1/gaugent-0.1.1.dmg" length="3480800" type="application/octet-stream" sparkle:edSignature="jmQbX34Ni8NbJDpBALnZ5uR/GgWXfWxKIo4/breh8vyjfHa9ggNX9cnWgdVECa2visVnvaAZTZyjNc6AnLelAA==" />
+        </item>
+        <item>
             <title>0.1.0</title>
             <sparkle:version>1</sparkle:version>
             <sparkle:shortVersionString>0.1.0</sparkle:shortVersionString>

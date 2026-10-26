@@ -9,7 +9,7 @@ python3 -m http.server 8080 --directory website
 node --test website/release.test.mjs
 ```
 
-Open http://localhost:8080. Test desktop and narrow layouts, keyboard focus, and release discovery. Published prereleases are eligible. Draft releases, missing DMGs, and `-local.dmg` assets are ignored. The page selects the most recently published eligible release and retains its direct-DMG fallback on timeout, rate limiting, or network failure if release discovery fails. The initial fallback points directly to the published 0.1.0 DMG; visitors never need to navigate a release-list page. It never needs a GitHub token.
+Open http://localhost:8080. Test desktop and narrow layouts, keyboard focus, and release discovery. Published prereleases are eligible. Draft releases, missing DMGs, and `-local.dmg` assets are ignored. The page selects the most recently published eligible release and retains its direct-DMG fallback on timeout, rate limiting, or network failure if release discovery fails. The static fallback points directly to the published 0.1.1 DMG; visitors never need to navigate a release-list page. It never needs a GitHub token.
 
 The repository, release assets, and update feed are public. Downloads and update checks require no GitHub account or token. Keep the release assets and embedded feed URL publicly accessible for installed apps.
 
