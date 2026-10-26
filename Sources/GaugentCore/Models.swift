@@ -101,7 +101,7 @@ public struct ProviderUsage: Codable, Equatable, Sendable, Identifiable {
     public static let staleAfter: TimeInterval = 600
 
     public func isStale(at now: Date = Date()) -> Bool {
-        guard condition != .error, let updatedAt else { return true }
+        guard condition == .ready, failureStreak == 0, let updatedAt else { return true }
         let age = now.timeIntervalSince(updatedAt)
         return age < 0 || age > Self.staleAfter
     }
@@ -168,10 +168,11 @@ public struct UsageSnapshot: Codable, Equatable, Sendable {
 }
 
 public enum AccountIdentity {
-    /// Stable, non-reversible key for an account. Returns `nil` when nothing identifies the account.
+    /// Context (provider, organization, login method) must not identify an account on its own.
+    /// Require the email reported by both supported CLIs before allowing cached-reading reuse.
     public static func key(_ fields: [String: String?]) -> String? {
         let present = fields.compactMapValues { $0 }.filter { !$0.value.isEmpty }
-        guard !present.isEmpty else { return nil }
+        guard let email = present["email"], !email.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
         let serialized = present.keys.sorted().map { "\($0)=\(present[$0]!)" }.joined(separator: "\n")
         let digest = SHA256.hash(data: Data(serialized.utf8))
         return digest.map { String(format: "%02x", $0) }.joined()
