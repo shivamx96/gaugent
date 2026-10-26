@@ -184,6 +184,9 @@ final class RateLimitParsingTests: XCTestCase {
         XCTAssertTrue(fresh.isStale(at: now.addingTimeInterval(-1)), "a reading from the future is not trusted")
         fresh.condition = .error
         XCTAssertTrue(fresh.isStale(at: now))
+        fresh.condition = .ready
+        fresh.failureStreak = 1
+        XCTAssertTrue(fresh.isStale(at: now), "older caches may mark a fallback ready despite the failed live read")
     }
 
     func testRetentionRequiresSameAccount() {
@@ -210,5 +213,10 @@ final class RateLimitParsingTests: XCTestCase {
         XCTAssertEqual(key?.count, 64)
         XCTAssertFalse(key!.contains("alice"))
         XCTAssertNil(AccountIdentity.key(["email": nil, "org": ""]))
+        for email: String? in [nil, "", " \n\t"] {
+            XCTAssertNil(AccountIdentity.key(["provider": "codex", "email": email]))
+            XCTAssertNil(AccountIdentity.key(["provider": "claude", "email": email,
+                "orgId": "shared-org", "authMethod": "oauth", "configDirectory": "/tmp/config"]))
+        }
     }
 }

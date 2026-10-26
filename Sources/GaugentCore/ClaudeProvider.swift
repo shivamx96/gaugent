@@ -105,7 +105,8 @@ public struct ClaudeProvider: UsageProvider {
         usage.windows = ClaudeRateLimits.windows(snapshot.rates)
         usage.notes = ClaudeRateLimits.notes(snapshot.rates)
         usage.updatedAt = snapshot.fetchedAt
-        usage.condition = .ready
+        // retainReading marked this failed attempt as an error. A newer CLI snapshot
+        // improves the displayed numbers, but must not turn a failed live read current.
         usage.message = "Live fetch unavailable; showing the reading Claude Code last fetched itself."
     }
 

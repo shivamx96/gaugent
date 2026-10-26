@@ -34,7 +34,7 @@ final class ProviderProcessTests: XCTestCase {
         elif method == 'account/read':
             account = os.environ.get('TEST_ACCOUNT', 'alice')
             result = {'account': None if account == 'none' else {
-                'type': os.environ.get('TEST_AUTH_TYPE', 'chatgpt'), 'email': account, 'planType': 'pro'}}
+                'type': os.environ.get('TEST_AUTH_TYPE', 'chatgpt'), 'email': None if os.environ.get('TEST_NO_EMAIL') else account, 'planType': 'pro'}}
         elif method == 'account/rateLimits/read':
             if os.environ.get('TEST_RATE_ERROR'):
                 print(json.dumps({'id': q['id'], 'error': {'message': 'private provider error'}}), flush=True)
@@ -50,7 +50,7 @@ final class ProviderProcessTests: XCTestCase {
     import json, os, sys
     if sys.argv[1:3] == ['auth', 'status']:
         print(json.dumps({'loggedIn': os.environ.get('TEST_LOGGED_OUT') is None, 'authMethod': os.environ.get('TEST_AUTH_METHOD', 'claude.ai'),
-                          'email': os.environ.get('TEST_ACCOUNT', 'alice'), 'orgId': 'org', 'subscriptionType': 'pro'}))
+                          'email': None if os.environ.get('TEST_NO_EMAIL') else os.environ.get('TEST_ACCOUNT', 'alice'), 'orgId': 'org', 'subscriptionType': 'pro'}))
         sys.exit()
     assert '--safe-mode' in sys.argv and '--no-session-persistence' in sys.argv
     assert sys.argv[sys.argv.index('--tools') + 1] == ''
@@ -154,11 +154,11 @@ final class ProviderProcessTests: XCTestCase {
         let provider = ClaudeProvider(preferredPath: path, home: directory, configDirectory: directory)
         let configURL = directory.appendingPathComponent(".claude.json")
 
-        func writeConfig(email: String, cachedAccount: String = "acc") throws {
+        func writeConfig(email: String, cachedAccount: String = "acc", fetchedAtMs: Double = 1_700_000_000_000) throws {
             let object: [String: Any] = [
                 "oauthAccount": ["emailAddress": email, "organizationUuid": "org", "accountUuid": "acc"],
                 "cachedUsageUtilization": [
-                    "fetchedAtMs": 1_700_000_000_000, "accountUuid": cachedAccount,
+                    "fetchedAtMs": fetchedAtMs, "accountUuid": cachedAccount,
                     "utilization": ["limits": [["kind": "weekly_all", "percent": 42, "resets_at": "2030-01-01T00:00:00Z"]],
                                     "extra_usage": ["is_enabled": false]]
                 ]
@@ -169,7 +169,7 @@ final class ProviderProcessTests: XCTestCase {
         try writeConfig(email: "alice")
         withEnvironment(["TEST_NULL_RATES": "1"]) {
             let reading = provider.read(previous: nil)
-            XCTAssertEqual(reading.condition, .ready)
+            XCTAssertEqual(reading.condition, .error)
             XCTAssertEqual(reading.windows.map(\.label), ["Weekly · All models"])
             XCTAssertEqual(reading.windows.map(\.remainingPercent), [58])
             XCTAssertEqual(reading.updatedAt, Date(timeIntervalSince1970: 1_700_000_000))
@@ -185,6 +185,24 @@ final class ProviderProcessTests: XCTestCase {
             XCTAssertEqual(kept.condition, .error)
         }
 
+        try writeConfig(email: "alice", fetchedAtMs: Date().timeIntervalSince1970 * 1000)
+        withEnvironment(["TEST_NULL_RATES": "1"]) {
+            let recent = provider.read(previous: nil)
+            XCTAssertEqual(recent.condition, .error)
+            XCTAssertEqual(recent.failureStreak, 1)
+            XCTAssertFalse(recent.windows.isEmpty)
+            XCTAssertTrue(recent.isStale(), "even a recent fallback must not drive live allowance warnings")
+            XCTAssertNil(UsageOverview(providers: [recent]).lowest)
+            let repeated = provider.read(previous: recent)
+            XCTAssertEqual(repeated.windows, recent.windows)
+            XCTAssertTrue(repeated.isStale())
+            XCTAssertEqual(repeated.failureStreak, 2)
+        }
+        let recovered = provider.read(previous: nil)
+        XCTAssertEqual(recovered.condition, .ready)
+        XCTAssertFalse(recovered.isStale())
+        XCTAssertEqual(recovered.failureStreak, 0)
+
         try writeConfig(email: "bob")
         withEnvironment(["TEST_NULL_RATES": "1"]) {
             XCTAssertEqual(provider.read(previous: nil).windows, [])
@@ -192,6 +210,28 @@ final class ProviderProcessTests: XCTestCase {
         try writeConfig(email: "alice", cachedAccount: "someone-else")
         withEnvironment(["TEST_NULL_RATES": "1"]) {
             XCTAssertEqual(provider.read(previous: nil).windows, [])
+        }
+    }
+
+    func testUnidentifiedAccountsNeverRetainReadings() throws {
+        let codex = try install("codex", script: fakeCodex)
+        let claude = try install("claude", script: fakeClaude)
+        let providers: [any UsageProvider] = [
+            CodexProvider(preferredPath: codex, home: directory),
+            ClaudeProvider(preferredPath: claude, home: directory, configDirectory: directory)
+        ]
+        withEnvironment(["TEST_NO_EMAIL": "1"]) {
+            for provider in providers {
+                let first = provider.read(previous: nil)
+                XCTAssertNil(first.accountKey)
+                XCTAssertFalse(first.windows.isEmpty, "live reads may still be displayed")
+                withEnvironment(["TEST_RATE_ERROR": "1"]) {
+                    let failed = provider.read(previous: first)
+                    XCTAssertEqual(failed.condition, .error)
+                    XCTAssertTrue(failed.windows.isEmpty)
+                    XCTAssertNil(failed.updatedAt)
+                }
+            }
         }
     }
 
