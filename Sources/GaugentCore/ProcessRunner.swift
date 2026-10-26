@@ -22,9 +22,11 @@ public protocol ProcessRunning: Sendable {
 public struct ProcessRunner: ProcessRunning {
     public static let defaultTimeout: TimeInterval = 15
     private let timeout: TimeInterval
+    private let environment: [String: String]?
 
-    public init(timeout: TimeInterval = ProcessRunner.defaultTimeout) {
+    public init(timeout: TimeInterval = ProcessRunner.defaultTimeout, environment: [String: String]? = nil) {
         self.timeout = timeout
+        self.environment = environment
     }
 
     public func run(executable: String, arguments: [String], currentDirectory: URL? = nil) -> ProcessResult {
@@ -34,6 +36,8 @@ public struct ProcessRunner: ProcessRunning {
         process.executableURL = URL(fileURLWithPath: executable)
         process.arguments = arguments
         process.currentDirectoryURL = currentDirectory
+        process.environment = ExecutableLocator.childEnvironment(executable: executable,
+            environment: environment ?? ProcessInfo.processInfo.environment)
         process.standardInput = FileHandle.nullDevice
         process.standardOutput = stdout
         process.standardError = stderr

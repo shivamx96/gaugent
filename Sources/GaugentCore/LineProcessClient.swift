@@ -26,10 +26,13 @@ public final class LineProcessClient: @unchecked Sendable {
     private var scanned = 0
 
     // One caller owns start/send/receive/terminate. Only expireDeadline may run concurrently.
-    public init(executable: String, arguments: [String], currentDirectory: URL, timeout: TimeInterval = 15) {
+    public init(executable: String, arguments: [String], currentDirectory: URL, timeout: TimeInterval = 15,
+                environment: [String: String]? = nil) {
         process.executableURL = URL(fileURLWithPath: executable)
         process.arguments = arguments
         process.currentDirectoryURL = currentDirectory
+        process.environment = ExecutableLocator.childEnvironment(executable: executable,
+            environment: environment ?? ProcessInfo.processInfo.environment)
         process.standardInput = input
         process.standardOutput = output
         process.standardError = FileHandle.nullDevice
