@@ -23,19 +23,44 @@ public enum ExecutableLocator {
         if let preferredPath, !preferredPath.isEmpty {
             candidates.append(preferredPath)
         }
-        if let path = environment["PATH"] {
-            candidates.append(contentsOf: path.split(separator: ":").map { "\($0)/\(name)" })
-        }
-        candidates.append(contentsOf: [
-            "/opt/homebrew/bin/\(name)",
-            "/usr/local/bin/\(name)",
-            "/opt/local/bin/\(name)",
-            home.appendingPathComponent(".local/bin/\(name)").path,
-            home.appendingPathComponent(".npm-global/bin/\(name)").path,
-            home.appendingPathComponent(".bun/bin/\(name)").path,
-            home.appendingPathComponent(".volta/bin/\(name)").path,
-            home.appendingPathComponent(".cargo/bin/\(name)").path
-        ])
+        candidates.append(contentsOf: searchDirectories(environment: environment, home: home).map { "\($0)/\(name)" })
         return candidates.first { FileManager.default.isExecutableFile(atPath: $0) }
+    }
+
+    /// Finding an npm launcher is insufficient if its /usr/bin/env shebang cannot find node.
+    /// Preserve inherited PATH precedence and all other environment values; add runtime locations.
+    public static func childEnvironment(
+        executable: String,
+        environment: [String: String] = ProcessInfo.processInfo.environment,
+        home: URL = FileManager.default.homeDirectoryForCurrentUser
+    ) -> [String: String] {
+        var result = environment
+        let executableURL = URL(fileURLWithPath: executable)
+        let directories = inheritedDirectories(environment) + [
+            executableURL.deletingLastPathComponent().path,
+            executableURL.resolvingSymlinksInPath().deletingLastPathComponent().path
+        ] + fallbackDirectories(home: home)
+        result["PATH"] = unique(directories).joined(separator: ":")
+        return result
+    }
+
+    private static func searchDirectories(environment: [String: String], home: URL) -> [String] {
+        unique(inheritedDirectories(environment) + fallbackDirectories(home: home))
+    }
+
+    private static func inheritedDirectories(_ environment: [String: String]) -> [String] {
+        (environment["PATH"] ?? "").split(separator: ":").map(String.init)
+    }
+
+    private static func fallbackDirectories(home: URL) -> [String] {
+        ["/opt/homebrew/bin", "/usr/local/bin", "/opt/local/bin"] +
+        [".local/bin", ".npm-global/bin", ".bun/bin", ".volta/bin", ".cargo/bin"].map {
+            home.appendingPathComponent($0).path
+        } + ["/usr/bin", "/bin", "/usr/sbin", "/sbin"]
+    }
+
+    private static func unique(_ paths: [String]) -> [String] {
+        var seen = Set<String>()
+        return paths.filter { seen.insert($0).inserted }
     }
 }
