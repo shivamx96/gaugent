@@ -126,8 +126,8 @@ public enum CodexRateLimits {
         }
 
         if let resets = payload["rateLimitResetCredits"] as? [String: Any],
-           let available = finiteNumber(resets["availableCount"]), available >= 1 {
-            let count = Int(available)
+           let available = finiteNumber(resets["availableCount"]),
+           let count = Int(exactly: available), count >= 1 {
             notes.append(count == 1 ? "1 full reset available" : "\(count) full resets available")
         }
 
@@ -136,9 +136,9 @@ public enum CodexRateLimits {
 
     /// Provider-driven window names: "5-hour", "7-day", or the raw minutes when unusual.
     public static func durationLabel(minutes: Double?, fallback: String) -> String {
-        guard let minutes, minutes > 0 else { return fallback }
+        guard let minutes, minutes.isFinite, minutes > 0, minutes < Double(Int.max) else { return fallback }
         func format(_ value: Double) -> String {
-            value == value.rounded() ? String(Int(value)) : String(value)
+            Int(exactly: value).map(String.init) ?? String(value)
         }
         if minutes.truncatingRemainder(dividingBy: 1440) == 0 { return "\(format(minutes / 1440))-day" }
         if minutes.truncatingRemainder(dividingBy: 60) == 0 { return "\(format(minutes / 60))-hour" }
