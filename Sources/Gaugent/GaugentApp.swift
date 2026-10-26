@@ -15,6 +15,7 @@ final class GaugentAppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegat
     let updates = UpdateController()
 
     private var statusItem: NSStatusItem?
+    private var lastMenuBarPresentation: MenuBarPresentation?
     private let popover = NSPopover()
     private var settingsWindow: NSWindow?
     private var globalShortcut: GlobalShortcutRegistrar?
@@ -59,9 +60,19 @@ final class GaugentAppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegat
     }
 
     private func observeModel() {
-        model.objectWillChange
+        Publishers.MergeMany([
+            model.$snapshot.map { _ in () }.eraseToAnyPublisher(),
+            model.$now.map { _ in () }.eraseToAnyPublisher(),
+            model.$enabledProviderIDs.map { _ in () }.eraseToAnyPublisher(),
+            model.$menuBarDisplayMode.map { _ in () }.eraseToAnyPublisher(),
+            model.$dimIconWhenIdle.map { _ in () }.eraseToAnyPublisher(),
+            model.$isGlobalShortcutRegistered.map { _ in () }.eraseToAnyPublisher()
+        ])
+            // @Published emits before assignment; read the completed state on the next run-loop turn.
             .receive(on: RunLoop.main)
-            .sink { [weak self] _ in DispatchQueue.main.async { self?.updateStatusItem() } }
+            .compactMap { [weak self] _ in self?.model.menuBarPresentation }
+            .removeDuplicates()
+            .sink { [weak self] presentation in self?.updateStatusItem(presentation) }
             .store(in: &cancellables)
 
         model.$appearance
@@ -147,19 +158,22 @@ final class GaugentAppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegat
 
     func windowWillClose(_ notification: Notification) { NSApp.hide(nil) }
 
-    private func updateStatusItem() {
+    private func updateStatusItem(_ presentation: MenuBarPresentation? = nil) {
         guard let button = statusItem?.button else { return }
-        let lowest = model.lowestRemaining
-        button.image = GaugentIconRenderer.menuBarIcon(remaining: lowest.map { $0 / 100 })
+        let presentation = presentation ?? model.menuBarPresentation
+        guard presentation != lastMenuBarPresentation else { return }
+        if lastMenuBarPresentation == nil || presentation.remainingFraction != lastMenuBarPresentation?.remainingFraction {
+            button.image = GaugentIconRenderer.menuBarIcon(remaining: presentation.remainingFraction)
+        }
         button.imagePosition = .imageLeft
         button.font = .monospacedDigitSystemFont(ofSize: 10.5, weight: .medium)
-        button.title = model.overview.blockedProvider != nil ? " !" : model.menuBarDisplayMode == .glyphAndPercent && lowest != nil ? " \(Int(lowest!.rounded(.down)))%" : ""
-        button.alphaValue = model.dimIconWhenIdle && lowest == nil && model.overview.blockedProvider == nil ? 0.58 : 1
-        button.toolTip = model.headline + " · " + model.overview.statusText + "\n" + (model.isGlobalShortcutRegistered
-            ? "gaugent — \(GlobalShortcutDefinition.showGaugent.label)"
-            : "gaugent")
-        button.setAccessibilityLabel(model.overview.blockedProvider.map { "gaugent, \($0.name), limit reached" } ?? lowest.map { "gaugent, lowest allowance \(Int($0)) percent remaining. \(model.headline). \(model.overview.statusText)" } ?? "gaugent, no usage readings")
+        button.title = presentation.title
+        button.alphaValue = presentation.alpha
+        button.toolTip = presentation.toolTip
+        button.setAccessibilityLabel(presentation.accessibilityLabel)
+        lastMenuBarPresentation = presentation
     }
+
 }
 
 extension GaugentAppDelegate: NSPopoverDelegate {
