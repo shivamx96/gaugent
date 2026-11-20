@@ -113,4 +113,12 @@ final class UsageOverviewTests: XCTestCase {
         XCTAssertNil(window.durationMinutes)
         XCTAssertEqual(window.remainingPercent, 30)
     }
+
+    func testNonFiniteResetIsUnknownRatherThanExpired() {
+        for seconds in [Double.nan, Double.infinity, -Double.infinity] {
+            let window = UsageWindow(label: "Weekly", remainingPercent: 30,
+                                     resetsAt: Date(timeIntervalSince1970: seconds))
+            XCTAssertFalse(window.isExpired(at: now), "Invalid reset: \(seconds)")
+        }
+    }
 }

@@ -97,7 +97,8 @@ final class MenuBarPresentationTests: XCTestCase {
         for seconds in [1e100, Double.infinity, Double.nan] {
             value.windows = [UsageWindow(label: "Weekly", remainingPercent: 17,
                                          resetsAt: Date(timeIntervalSince1970: seconds))]
-            XCTAssertTrue(presentation(value, at: now).toolTip.contains("reset time unavailable"))
+            XCTAssertTrue(presentation(value, at: now).toolTip.contains("reset time unavailable"),
+                          "Invalid reset: \(seconds)")
         }
     }
 }

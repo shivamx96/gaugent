@@ -25,7 +25,9 @@ public struct UsageWindow: Codable, Equatable, Sendable, Identifiable {
 
     /// A window whose reset time has passed is awaiting a fresh reading, not replenished.
     public func isExpired(at now: Date = Date()) -> Bool {
-        guard let resetsAt else { return false }
+        // Foundation's Date comparison of NaN differs across macOS versions. An invalid
+        // cached reset is unknown, not expired, and must never reach date formatting.
+        guard let resetsAt, resetsAt.timeIntervalSince1970.isFinite else { return false }
         return resetsAt <= now
     }
 }
