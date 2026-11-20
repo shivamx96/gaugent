@@ -185,16 +185,42 @@ extension GaugentAppDelegate: NSPopoverDelegate {
 }
 
 enum GaugentIconRenderer {
-    /// Provider artwork identifies the allowance. Unknown providers retain the gaugent dial.
+    /// Keep gaugent's dial, with a plain-letter provider badge overlapping its lower-right edge.
     static func menuBarIcon(providerID: String? = nil, remaining: Double?) -> NSImage {
-        if let image = ProviderArtwork.menuBarIcon(providerID: providerID) { return image }
-        let image = NSImage(size: NSSize(width: 18, height: 18), flipped: true) { rect in
-            drawDial(in: rect.insetBy(dx: 1.5, dy: 1.5), color: .labelColor, lineWidth: 1.6, remaining: remaining)
+        let badge: String?
+        switch providerID {
+        case "codex": badge = "O"
+        case "claude": badge = "A"
+        default: badge = nil
+        }
+        let image = NSImage(size: NSSize(width: badge == nil ? 18 : 20, height: 18), flipped: true) { _ in
+            drawDial(in: NSRect(x: 1.5, y: 1.5, width: 15, height: 15),
+                     color: .black, lineWidth: 1.6, remaining: remaining)
+            if let badge {
+                drawBadge(badge, in: NSRect(x: 12, y: 8, width: 8, height: 10))
+            }
             return true
         }
         image.isTemplate = true
-        image.accessibilityDescription = "gaugent"
+        image.accessibilityDescription = providerID == "codex" ? "gaugent, OpenAI" :
+            providerID == "claude" ? "gaugent, Anthropic" : "gaugent"
         return image
+    }
+
+    private static func drawBadge(_ badge: String, in rect: NSRect) {
+        NSGraphicsContext.saveGraphicsState()
+        defer { NSGraphicsContext.restoreGraphicsState() }
+        // Clear a small halo instead of painting a background, so template tinting works
+        // on light, dark, and translucent menu bars.
+        NSGraphicsContext.current?.compositingOperation = .clear
+        NSBezierPath(roundedRect: rect.insetBy(dx: -1, dy: -0.5), xRadius: 2, yRadius: 2).fill()
+        NSGraphicsContext.current?.compositingOperation = .sourceOver
+        let text = NSAttributedString(string: badge, attributes: [
+            .font: NSFont.systemFont(ofSize: 9, weight: .bold),
+            .foregroundColor: NSColor.black
+        ])
+        let size = text.size()
+        text.draw(at: NSPoint(x: rect.midX - size.width / 2, y: rect.midY - size.height / 2))
     }
 
     static func applicationIcon() -> NSImage {

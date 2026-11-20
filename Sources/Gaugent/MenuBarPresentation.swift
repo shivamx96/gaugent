@@ -20,9 +20,9 @@ struct MenuBarPresentation: Equatable {
         // A positive fraction must not be presented as an exhausted allowance.
         let percent = remaining.map { $0 < 1 ? "<1%" : "\(Int($0.rounded(.down)))%" }
         let headline: String
-        if let blocked { headline = "\(blocked.name) · limit reached" }
+        if let blocked { headline = "\(Self.providerLabel(blocked)) · limit reached" }
         else if let lowest, let percent {
-            var detail = "\(lowest.provider.name) · \(lowest.window.label) · \(percent) remaining"
+            var detail = "\(Self.providerLabel(lowest.provider)) · \(lowest.window.label) · \(percent) remaining"
             if let reset = lowest.window.resetsAt {
                 if reset.timeIntervalSince1970.isFinite, reset <= .distantFuture, reset >= .distantPast {
                     detail += " · resets \(reset.formatted(date: .abbreviated, time: .shortened))"
@@ -40,6 +40,14 @@ struct MenuBarPresentation: Equatable {
         accessibilityLabel = blocked.map { "gaugent, \($0.name), limit reached" } ?? percent.map { _ in
             "gaugent, lowest usable allowance. \(headline.replacingOccurrences(of: "<1%", with: "less than 1 percent")). \(overview.statusText)"
         } ?? "gaugent, no usage readings"
+    }
+
+    private static func providerLabel(_ provider: ProviderUsage) -> String {
+        switch provider.id {
+        case "codex": return "OpenAI · \(provider.name)"
+        case "claude": return "Anthropic · \(provider.name)"
+        default: return provider.name
+        }
     }
 }
 

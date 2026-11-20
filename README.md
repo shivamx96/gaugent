@@ -10,7 +10,7 @@
 </p>
 
 gaugent shows Claude Code and Codex subscription allowances, reset times, and the lowest
-usable allowance beside its provider's mark in your menu bar. Hover for the allowance window
+usable allowance beside a gauge badged with O (OpenAI) or A (Anthropic) in your menu bar. Hover for the allowance window
 and reset time; open the panel for all limits. Missing tools, stale readings, and reached limits are
 clearly marked. Available limits depend on what each installed CLI reports.
 
