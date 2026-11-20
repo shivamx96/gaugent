@@ -8,18 +8,26 @@ public struct UsageWindow: Codable, Equatable, Sendable, Identifiable {
     public let remainingPercent: Double
     /// When the provider says the window replenishes. `nil` when it did not say.
     public let resetsAt: Date?
+    /// Nil means a shared constraint; matching IDs identify windows governing the same usage.
+    public let scopeID: String?
+    public let durationMinutes: Double?
 
     public var id: String { label }
 
-    public init(label: String, remainingPercent: Double, resetsAt: Date?) {
+    public init(label: String, remainingPercent: Double, resetsAt: Date?, scopeID: String? = nil,
+                durationMinutes: Double? = nil) {
         self.label = String(label.prefix(80))
         self.remainingPercent = min(100, max(0, remainingPercent))
         self.resetsAt = resetsAt
+        self.scopeID = scopeID
+        self.durationMinutes = durationMinutes
     }
 
     /// A window whose reset time has passed is awaiting a fresh reading, not replenished.
     public func isExpired(at now: Date = Date()) -> Bool {
-        guard let resetsAt else { return false }
+        // Foundation's Date comparison of NaN differs across macOS versions. An invalid
+        // cached reset is unknown, not expired, and must never reach date formatting.
+        guard let resetsAt, resetsAt.timeIntervalSince1970.isFinite else { return false }
         return resetsAt <= now
     }
 }
@@ -50,6 +58,8 @@ public struct ProviderUsage: Codable, Equatable, Sendable, Identifiable {
     public var attemptedAt: Date?
     /// Explicit provider block; optional for compatibility with older cached readings.
     public var limitReached: Bool?
+    /// Explicit blocks on individual model/bucket allowances, rather than the entire provider.
+    public var blockedScopes: [String]?
     /// Consecutive refreshes whose live read failed; drives the automatic backoff.
     public var failureStreak: Int
 
@@ -67,7 +77,8 @@ public struct ProviderUsage: Codable, Equatable, Sendable, Identifiable {
         accountKey: String? = nil,
         attemptedAt: Date? = nil,
         failureStreak: Int = 0,
-        limitReached: Bool? = nil
+        limitReached: Bool? = nil,
+        blockedScopes: [String]? = nil
     ) {
         self.id = id
         self.name = name
@@ -83,6 +94,7 @@ public struct ProviderUsage: Codable, Equatable, Sendable, Identifiable {
         self.attemptedAt = attemptedAt
         self.failureStreak = failureStreak
         self.limitReached = limitReached
+        self.blockedScopes = blockedScopes
     }
 
     /// Base interval between automatic attempts after a failure; doubles per failure up to `maximumBackoff`.
@@ -113,6 +125,25 @@ public struct ProviderUsage: Codable, Equatable, Sendable, Identifiable {
     /// Smallest remaining share among windows that are still counting down, or `nil`.
     public func lowestRemaining(at now: Date = Date()) -> Double? {
         liveWindows(at: now).map(\.remainingPercent).min()
+    }
+
+    /// Every shared constraint and every constraint on the selected scope must be usable.
+    /// An expired constraint is unknown until refreshed, never assumed replenished.
+    public func usableWindows(at now: Date = Date()) -> [UsageWindow] {
+        guard !isStale(at: now), limitReached != true else { return [] }
+        let shared = windows.filter { $0.scopeID == nil }
+        func usable(_ window: UsageWindow) -> Bool {
+            !window.isExpired(at: now) && window.remainingPercent > 0
+        }
+        guard shared.allSatisfy(usable) else { return [] }
+        let scoped = Dictionary(grouping: windows.filter { $0.scopeID != nil }, by: { $0.scopeID! })
+        let availableScopes = scoped.filter { id, constraints in
+            !(blockedScopes ?? []).contains(id) && constraints.allSatisfy(usable)
+        }
+        // Scoped rows need not list every supported model. A model-specific block must
+        // not invalidate a healthy shared allowance for usage outside that scope.
+        // Preserve provider order for equal percentages; dictionary iteration is not stable.
+        return windows.filter { $0.scopeID.map { availableScopes[$0] != nil } ?? true }
     }
 
     /// Keeps the last good reading after a failed refresh, but only for the same account.
@@ -204,9 +235,11 @@ public func resetDate(_ value: Any?) -> Date? {
 }
 
 /// Builds a window from a used percentage, rejecting anything that is not a real number.
-public func usageWindow(label: String, usedPercent: Any?, resetsAt: Any?) -> UsageWindow? {
+public func usageWindow(label: String, usedPercent: Any?, resetsAt: Any?, scopeID: String? = nil,
+                        durationMinutes: Double? = nil) -> UsageWindow? {
     guard let used = finiteNumber(usedPercent), used >= 0 else { return nil }
-    return UsageWindow(label: label, remainingPercent: max(0, 100 - used), resetsAt: resetDate(resetsAt))
+    return UsageWindow(label: label, remainingPercent: max(0, 100 - used), resetsAt: resetDate(resetsAt),
+                       scopeID: scopeID, durationMinutes: durationMinutes)
 }
 
 /// Shared presentation state: authentication alone does not imply usable quota data.
@@ -220,7 +253,16 @@ public struct UsageOverview {
     }
 
     public var blockedProvider: ProviderUsage? {
-        providers.first { !$0.isStale(at: now) && $0.limitReached == true }
+        providers.first {
+            !$0.isStale(at: now) && ($0.limitReached == true || !($0.blockedScopes ?? []).isEmpty ||
+                $0.liveWindows(at: now).contains { $0.remainingPercent == 0 })
+        }
+    }
+
+    public var lowestUsable: (provider: ProviderUsage, window: UsageWindow)? {
+        providers.flatMap { provider in
+            provider.usableWindows(at: now).map { (provider: provider, window: $0) }
+        }.min { $0.window.remainingPercent < $1.window.remainingPercent }
     }
 
     public var lowest: (provider: ProviderUsage, window: UsageWindow)? {
