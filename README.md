@@ -16,7 +16,7 @@ clearly marked. Available limits depend on what each installed CLI reports.
 
 ## Install
 
-[Download for macOS](https://github.com/shivamx96/gaugent/releases/download/v0.1.1/gaugent-0.1.1.dmg)
+[Download for macOS](https://github.com/shivamx96/gaugent/releases/download/v0.1.2/gaugent-0.1.2.dmg)
 · [Release notes](https://github.com/shivamx96/gaugent/releases)
 
 Requires **macOS 14 or later**. The signed and notarized app supports **Apple Silicon and Intel**.
