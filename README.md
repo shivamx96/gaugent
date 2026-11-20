@@ -10,7 +10,8 @@
 </p>
 
 gaugent shows Claude Code and Codex subscription allowances, reset times, and the lowest
-current allowance in your menu bar. Missing tools, stale readings, and reached limits are
+usable allowance beside its provider's mark in your menu bar. Hover for the allowance window
+and reset time; open the panel for all limits. Missing tools, stale readings, and reached limits are
 clearly marked. Available limits depend on what each installed CLI reports.
 
 ## Install

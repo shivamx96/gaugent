@@ -162,8 +162,10 @@ final class GaugentAppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegat
         guard let button = statusItem?.button else { return }
         let presentation = presentation ?? model.menuBarPresentation
         guard presentation != lastMenuBarPresentation else { return }
-        if lastMenuBarPresentation == nil || presentation.remainingFraction != lastMenuBarPresentation?.remainingFraction {
-            button.image = GaugentIconRenderer.menuBarIcon(remaining: presentation.remainingFraction)
+        if lastMenuBarPresentation == nil || presentation.providerID != lastMenuBarPresentation?.providerID ||
+            presentation.remainingFraction != lastMenuBarPresentation?.remainingFraction {
+            button.image = GaugentIconRenderer.menuBarIcon(providerID: presentation.providerID,
+                                                         remaining: presentation.remainingFraction)
         }
         button.imagePosition = .imageLeft
         button.font = .monospacedDigitSystemFont(ofSize: 10.5, weight: .medium)
@@ -183,8 +185,9 @@ extension GaugentAppDelegate: NSPopoverDelegate {
 }
 
 enum GaugentIconRenderer {
-    /// Template dial whose needle tracks the lowest remaining share, or a bare dial when unknown.
-    static func menuBarIcon(remaining: Double?) -> NSImage {
+    /// Provider artwork identifies the allowance. Unknown providers retain the gaugent dial.
+    static func menuBarIcon(providerID: String? = nil, remaining: Double?) -> NSImage {
+        if let image = ProviderArtwork.menuBarIcon(providerID: providerID) { return image }
         let image = NSImage(size: NSSize(width: 18, height: 18), flipped: true) { rect in
             drawDial(in: rect.insetBy(dx: 1.5, dy: 1.5), color: .labelColor, lineWidth: 1.6, remaining: remaining)
             return true

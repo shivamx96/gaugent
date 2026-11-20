@@ -217,9 +217,11 @@ public enum ClaudeRateLimits {
         var result: [UsageWindow] = []
         var labels = Set<String>()
 
-        func add(_ label: String, _ data: Any?, usedKey: String = "utilization") {
+        func add(_ label: String, _ data: Any?, usedKey: String = "utilization",
+                 scopeID: String? = nil, durationMinutes: Double = 10080) {
             guard let data = data as? [String: Any], !labels.contains(label),
-                  let window = usageWindow(label: label, usedPercent: data[usedKey], resetsAt: data["resets_at"]) else { return }
+                  let window = usageWindow(label: label, usedPercent: data[usedKey], resetsAt: data["resets_at"],
+                                           scopeID: scopeID, durationMinutes: durationMinutes) else { return }
             labels.insert(label)
             result.append(window)
         }
@@ -227,27 +229,27 @@ public enum ClaudeRateLimits {
         for row in rates["limits"] as? [[String: Any]] ?? [] {
             switch row["kind"] as? String {
             case "session":
-                add("Session · 5-hour", row, usedKey: "percent")
+                add("Session · 5-hour", row, usedKey: "percent", durationMinutes: 300)
             case "weekly_all":
                 add("Weekly · All models", row, usedKey: "percent")
             case "weekly_scoped":
                 if let model = ((row["scope"] as? [String: Any])?["model"] as? [String: Any])?["display_name"] as? String {
-                    add("Weekly · \(model) only", row, usedKey: "percent")
+                    add("Weekly · \(model) only", row, usedKey: "percent", scopeID: model.lowercased())
                 }
             default:
                 continue
             }
         }
 
-        add("Session · 5-hour", rates["five_hour"])
+        add("Session · 5-hour", rates["five_hour"], durationMinutes: 300)
         add("Weekly · All models", rates["seven_day"])
         for row in rates["model_scoped"] as? [[String: Any]] ?? [] {
             if let model = row["display_name"] as? String {
-                add("Weekly · \(model) only", row)
+                add("Weekly · \(model) only", row, scopeID: model.lowercased())
             }
         }
-        add("Weekly · Opus only", rates["seven_day_opus"])
-        add("Weekly · Sonnet only", rates["seven_day_sonnet"])
+        add("Weekly · Opus only", rates["seven_day_opus"], scopeID: "opus")
+        add("Weekly · Sonnet only", rates["seven_day_sonnet"], scopeID: "sonnet")
         return result
     }
 

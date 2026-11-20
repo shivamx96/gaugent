@@ -48,7 +48,10 @@ final class RateLimitParsingTests: XCTestCase {
         XCTAssertEqual(reading.windows.map(\.label), ["5-hour", "7-day", "Spend limit"])
         XCTAssertEqual(reading.windows.map(\.remainingPercent), [68, 90, 25.5])
         XCTAssertEqual(reading.notes, ["Credit balance 12.50", "3 full resets available"])
-        XCTAssertTrue(reading.limitReached)
+        XCTAssertFalse(reading.limitReached)
+        XCTAssertEqual(reading.blockedScopes, ["codex"])
+        XCTAssertEqual(reading.windows.map(\.scopeID), ["codex", "codex", "codex"])
+        XCTAssertEqual(reading.windows.map(\.durationMinutes), [300, 10080, nil])
         XCTAssertTrue(CodexRateLimits.parse(["ordinaryUsageAllowed": false]).limitReached)
     }
 
@@ -84,6 +87,8 @@ final class RateLimitParsingTests: XCTestCase {
         ])
         XCTAssertEqual(windows.map(\.label), ["Weekly · Fable only", "Weekly · All models", "Session · 5-hour"])
         XCTAssertEqual(windows.map(\.remainingPercent), [36, 59, 100])
+        XCTAssertEqual(windows.map(\.scopeID), ["fable", nil, nil])
+        XCTAssertEqual(windows.map(\.durationMinutes), [10080, 10080, 300])
         XCTAssertEqual(ClaudeRateLimits.windows([:]), [])
     }
 

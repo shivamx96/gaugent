@@ -53,6 +53,7 @@ public struct CodexProvider: UsageProvider {
             let payload = try rpc.request("account/rateLimits/read")
             let reading = CodexRateLimits.parse(payload)
             usage.limitReached = reading.limitReached
+            usage.blockedScopes = reading.blockedScopes
             usage.windows = reading.windows
             usage.notes = reading.notes
             usage.updatedAt = Date()
@@ -60,6 +61,8 @@ public struct CodexProvider: UsageProvider {
             usage.failureStreak = 0
             if reading.limitReached {
                 usage.message = "Your account has reached a usage or spending limit."
+            } else if !reading.blockedScopes.isEmpty {
+                usage.message = "An allowance has reached a usage or spending limit."
             } else if reading.windows.isEmpty {
                 usage.message = "No allowance windows were reported for this account."
             } else {
@@ -77,6 +80,7 @@ public enum CodexRateLimits {
         public var windows: [UsageWindow]
         public var notes: [String]
         public var limitReached: Bool
+        public var blockedScopes: [String]
     }
 
     public static func parse(_ payload: [String: Any]) -> Reading {
@@ -93,7 +97,8 @@ public enum CodexRateLimits {
 
         var windows: [UsageWindow] = []
         var notes: [String] = []
-        var limitReached = payload["ordinaryUsageAllowed"] as? Bool == false
+        let limitReached = payload["ordinaryUsageAllowed"] as? Bool == false
+        var blockedScopes: [String] = []
 
         for key in keys {
             guard let bucket = buckets[key] else { continue }
@@ -101,20 +106,21 @@ public enum CodexRateLimits {
             for (field, fallback) in [("primary", "Primary"), ("secondary", "Secondary")] {
                 guard let data = bucket[field] as? [String: Any] else { continue }
                 let label = prefix + durationLabel(minutes: finiteNumber(data["windowDurationMins"]), fallback: fallback)
-                if let window = usageWindow(label: label, usedPercent: data["usedPercent"], resetsAt: data["resetsAt"]) {
+                let duration = finiteNumber(data["windowDurationMins"])
+                if let window = usageWindow(label: label, usedPercent: data["usedPercent"], resetsAt: data["resetsAt"],
+                                            scopeID: key, durationMinutes: duration.flatMap { $0 > 0 ? $0 : nil }) {
                     windows.append(window)
                 }
             }
             if let spend = bucket["individualLimit"] as? [String: Any], let remaining = finiteNumber(spend["remainingPercent"]) {
-                if let window = usageWindow(label: prefix + "Spend limit", usedPercent: 100 - remaining, resetsAt: spend["resetsAt"]) {
+                if let window = usageWindow(label: prefix + "Spend limit", usedPercent: 100 - remaining,
+                                            resetsAt: spend["resetsAt"], scopeID: key) {
                     windows.append(window)
                 }
             }
-            if bucket["rateLimitReachedType"] != nil && !(bucket["rateLimitReachedType"] is NSNull) {
-                limitReached = true
-            }
-            if bucket["spendControlReached"] as? Bool == true {
-                limitReached = true
+            if (bucket["rateLimitReachedType"] != nil && !(bucket["rateLimitReachedType"] is NSNull)) ||
+                bucket["spendControlReached"] as? Bool == true {
+                blockedScopes.append(key)
             }
             if let credits = bucket["credits"] as? [String: Any] {
                 if credits["unlimited"] as? Bool == true {
@@ -131,7 +137,7 @@ public enum CodexRateLimits {
             notes.append(count == 1 ? "1 full reset available" : "\(count) full resets available")
         }
 
-        return Reading(windows: windows, notes: notes, limitReached: limitReached)
+        return Reading(windows: windows, notes: notes, limitReached: limitReached, blockedScopes: blockedScopes)
     }
 
     /// Provider-driven window names: "5-hour", "7-day", or the raw minutes when unusual.
