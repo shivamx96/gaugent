@@ -46,6 +46,7 @@ struct MenuBarPresentation: Equatable {
         switch provider.id {
         case "codex": return "OpenAI · \(provider.name)"
         case "claude": return "Anthropic · \(provider.name)"
+        case "antigravity": return "Google · \(provider.name)"
         default: return provider.name
         }
     }

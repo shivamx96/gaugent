@@ -49,6 +49,7 @@ final class AppModel: ObservableObject {
         static let refreshAutomatically = "refreshAutomatically"
         static let lowThreshold = "lowThreshold"
         static let enabledProviderIDs = "enabledProviderIDs"
+        static let knownProviderIDs = "knownProviderIDs"
     }
 
     init(collector: UsageCollector = .standard, defaults: UserDefaults = .standard,
@@ -61,11 +62,21 @@ final class AppModel: ObservableObject {
         dimIconWhenIdle = defaults.object(forKey: Keys.dimIconWhenIdle) == nil ? true : defaults.bool(forKey: Keys.dimIconWhenIdle)
         refreshAutomatically = defaults.object(forKey: Keys.refreshAutomatically) == nil ? true : defaults.bool(forKey: Keys.refreshAutomatically)
         lowThreshold = defaults.object(forKey: Keys.lowThreshold) == nil ? 20 : defaults.integer(forKey: Keys.lowThreshold)
-        enabledProviderIDs = defaults.stringArray(forKey: Keys.enabledProviderIDs) ?? collector.providers.map(\.id)
+        var enabled = defaults.stringArray(forKey: Keys.enabledProviderIDs) ?? collector.providers.map(\.id)
+        // Offer newly added tools once, preserving explicitly disabled tools and an all-off preference.
+        let known = Set(defaults.stringArray(forKey: Keys.knownProviderIDs) ?? ["claude", "codex"])
+        if !enabled.isEmpty {
+            enabled += collector.providers.map(\.id).filter {
+                !known.contains($0) && !enabled.contains($0)
+            }
+        }
+        enabledProviderIDs = enabled
+        defaults.set(enabled, forKey: Keys.enabledProviderIDs)
+        defaults.set(collector.providers.map(\.id), forKey: Keys.knownProviderIDs)
         isLaunchAtLoginEnabled = SMAppService.mainApp.status == .enabled
 
         if let cacheURL = storageURL, let cached = UsageCache.load(from: cacheURL) {
-            snapshot = cached
+            snapshot = collector.cacheableSnapshot(cached)
         }
         if startAutomatically {
             configureTimers()
@@ -168,7 +179,7 @@ final class AppModel: ObservableObject {
             actionMessage = "Saved readings reset. " + overview.statusText + "."
         }
         if let cacheURL = storageURL {
-            UsageCache.save(fresh, to: cacheURL)
+            UsageCache.save(collector.cacheableSnapshot(fresh), to: cacheURL)
         }
         if pendingRefresh {
             pendingRefresh = false
@@ -264,9 +275,12 @@ final class AppModel: ObservableObject {
     }
 
     func openInstallationGuide(for providerID: String) {
-        let address = providerID == "codex"
-            ? "https://github.com/openai/codex#installation--setup"
-            : "https://github.com/anthropics/claude-code#installation"
+        let address: String
+        switch providerID {
+        case "antigravity": address = "https://antigravity.google/docs/install?tab=cli"
+        case "codex": address = "https://github.com/openai/codex#installation--setup"
+        default: address = "https://github.com/anthropics/claude-code#installation"
+        }
         open(URL(string: address)!)
     }
 

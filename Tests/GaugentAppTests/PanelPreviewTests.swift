@@ -31,6 +31,19 @@ final class PanelPreviewTests: XCTestCase {
         }
         let claude = ready("claude", "Claude Code", 18)
         let codex = ready("codex", "Codex", 65)
+        let antigravity = ProviderUsage(id: "antigravity", name: "Antigravity", installed: true, authenticated: true,
+            windows: [
+                UsageWindow(label: "Gemini Models · Weekly", remainingPercent: 42,
+                            resetsAt: now.addingTimeInterval(180000), scopeID: "gemini"),
+                UsageWindow(label: "Gemini Models · 5-hour", remainingPercent: 98,
+                            resetsAt: now.addingTimeInterval(7200), scopeID: "gemini"),
+                UsageWindow(label: "Claude and GPT models · Weekly", remainingPercent: 100,
+                            resetsAt: now.addingTimeInterval(180000), scopeID: "third-party"),
+                UsageWindow(label: "Claude and GPT models · 5-hour", remainingPercent: 100,
+                            resetsAt: now.addingTimeInterval(7200), scopeID: "third-party"),
+                UsageWindow(label: "Gemini 4 Argon · Weekly", remainingPercent: 100,
+                            resetsAt: now.addingTimeInterval(180000), scopeID: "argon")
+            ], updatedAt: now, condition: .ready, attemptedAt: now)
         var stale = claude
         stale.condition = .error
         stale.message = "Could not refresh usage. Last reported readings are shown below."
@@ -42,7 +55,7 @@ final class PanelPreviewTests: XCTestCase {
         let missing = ProviderUsage(id: "claude", name: "Claude Code", message: "Claude Code was not found on this Mac.")
         let signedOut = ProviderUsage(id: "codex", name: "Codex", installed: true, condition: .signedOut,
                                       message: "Sign in to see your subscription allowance.")
-        for (name, readings) in [("ready", [claude, codex]), ("stale", [stale, codex]),
+        for (name, readings) in [("ready", [claude, codex, antigravity]), ("antigravity", [antigravity]), ("stale", [stale, codex]),
                                  ("blocked", [claude, blocked]), ("setup", [missing, signedOut]), ("disabled", [])] {
             let suite = "gaugent-preview-\(UUID().uuidString)"
             let defaults = UserDefaults(suiteName: suite)!

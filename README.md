@@ -6,11 +6,11 @@
 
 <p align="center">
   <strong>How much of your coding-agent subscription is left, one glance away.</strong><br>
-  A tiny native macOS menu-bar app for Claude Code and Codex allowances.
+  A tiny native macOS menu-bar app for Claude Code, Codex, and Antigravity allowances.
 </p>
 
-gaugent shows Claude Code and Codex subscription allowances, reset times, and the lowest
-usable allowance beside a gauge badged with O (OpenAI) or A (Anthropic) in your menu bar. Hover for the allowance window
+gaugent shows Claude Code, Codex, and Antigravity subscription allowances, reset times, and the lowest
+usable allowance beside a gauge badged with O (OpenAI), A (Anthropic), or G (Google) in your menu bar. Hover for the allowance window
 and reset time; open the panel for all limits. Missing tools, stale readings, and reached limits are
 clearly marked. Available limits depend on what each installed CLI reports.
 
@@ -22,7 +22,7 @@ clearly marked. Available limits depend on what each installed CLI reports.
 Requires **macOS 14 or later**. The signed and notarized app supports **Apple Silicon and Intel**.
 
 1. Open the DMG, drag gaugent into Applications, eject the disk image, and launch gaugent.
-2. Install and sign in to Claude Code and/or Codex using a subscription account.
+2. Install and sign in to Claude Code, Codex, and/or Antigravity using a subscription account.
 3. Open the menu-bar icon. **Settings → Tools** provides setup and sign-in help.
 
 ## Use and settings
@@ -46,8 +46,17 @@ Local builds without a feed and update-signing key provide a release-download li
 | --- | --- | --- |
 | **Codex** | `codex app-server` account and rate-limit RPCs | `codex` on PATH, signed in with ChatGPT |
 | **Claude Code** | The `get_usage` control request in a print-mode session with no tools, no MCP servers, no persistence | `claude` on PATH, signed in with claude.ai |
+| **Antigravity** | The built-in `agy --print /usage --output-format json` command, after checking CLI compatibility | A recent `agy` on PATH, signed in with Google |
 
-Grok, Gemini, Muse, and other tools can be added by implementing the small `UsageProvider`
+Antigravity shows the quota groups and reset times its CLI reports, including separate Gemini
+and third-party model allowances. These are Antigravity allowances, not the Gemini chat app's
+usage or an overall Google AI plan balance. API-key billing is not supported. Run `agy update`
+if compatibility checks ask for an update. The reader requires version 1.1.12 or later with
+the `--settings` and `--print-timeout` options, and overrides literal slash-command mode so
+the quota check cannot be sent as a model prompt. The CLI does not report account identity
+or plan name in this response, so the account label is “Signed in”.
+
+Grok, Gemini chat, Muse, and other tools can be added by implementing the small `UsageProvider`
 protocol in `GaugentCore`.
 
 ## Private by construction
@@ -58,6 +67,8 @@ protocol in `GaugentCore`.
   identities only, with owner-only permissions.
 - After a failed refresh the last good reading is kept only when the same account is still
   signed in, and it is shown dimmed. Stale readings never trigger the low-allowance warning.
+- Antigravity readings are live-only: they are not saved between launches or retained after
+  failed refreshes because the quota response cannot verify which account owns them.
 - When Claude Code's live fetch is declined (its usage endpoint rate-limits busy accounts),
   gaugent falls back to the reading the CLI last fetched for itself, stored in `.claude.json`
   next to the profile, and only when that profile matches the signed-in account.

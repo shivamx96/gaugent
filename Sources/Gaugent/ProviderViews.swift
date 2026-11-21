@@ -68,12 +68,6 @@ struct ProviderCard: View {
                     WindowRow(window: window, stale: stale)
                 }
             }
-            if !provider.notes.isEmpty {
-                Text(provider.notes.joined(separator: " · "))
-                    .font(.system(size: 11))
-                    .foregroundStyle(GaugentTheme.secondaryInk(colorScheme))
-                    .fixedSize(horizontal: false, vertical: true)
-            }
             if !provider.message.isEmpty {
                 HStack(alignment: .top, spacing: 5) {
                     Image(systemName: provider.condition == .error || provider.limitReached == true ? "exclamationmark.triangle" : "info.circle")
@@ -86,6 +80,12 @@ struct ProviderCard: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
+        }
+        if !provider.notes.isEmpty {
+            Text(provider.notes.joined(separator: " · "))
+                .font(.system(size: 11))
+                .foregroundStyle(GaugentTheme.secondaryInk(colorScheme))
+                .fixedSize(horizontal: false, vertical: true)
         }
         if !model.ageText(provider).isEmpty || provider.condition == .error {
             HStack {
