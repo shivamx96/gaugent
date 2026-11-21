@@ -8,7 +8,7 @@ One sentence describing what this release helps users do.
 
 ## Installation
 
-Download the DMG, drag gaugent into Applications, eject the disk image, and launch gaugent. Requires macOS 14 or later; supports Apple Silicon and Intel. Install and sign in to Claude Code and/or Codex separately.
+Download the DMG, drag gaugent into Applications, eject the disk image, and launch gaugent. Requires macOS 14 or later; supports Apple Silicon and Intel. Install and sign in to Claude Code, Codex, and/or Antigravity separately.
 
 ## Updating
 

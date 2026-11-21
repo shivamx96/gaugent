@@ -154,7 +154,7 @@ public enum CodexRateLimits {
 
 public enum GaugentVersion {
     public static var string: String {
-        guard Bundle.main.bundleIdentifier == "com.shivamx96.gaugent" else { return "0.1.2" }
-        return Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0.1.2"
+        guard Bundle.main.bundleIdentifier == "com.shivamx96.gaugent" else { return "0.1.3" }
+        return Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0.1.3"
     }
 }
