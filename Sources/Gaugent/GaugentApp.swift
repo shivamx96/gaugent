@@ -191,6 +191,7 @@ enum GaugentIconRenderer {
         switch providerID {
         case "codex": badge = "O"
         case "claude": badge = "A"
+        case "antigravity": badge = "G"
         default: badge = nil
         }
         let image = NSImage(size: NSSize(width: badge == nil ? 18 : 20, height: 18), flipped: true) { _ in
@@ -203,7 +204,8 @@ enum GaugentIconRenderer {
         }
         image.isTemplate = true
         image.accessibilityDescription = providerID == "codex" ? "gaugent, OpenAI" :
-            providerID == "claude" ? "gaugent, Anthropic" : "gaugent"
+            providerID == "claude" ? "gaugent, Anthropic" :
+            providerID == "antigravity" ? "gaugent, Google" : "gaugent"
         return image
     }
 

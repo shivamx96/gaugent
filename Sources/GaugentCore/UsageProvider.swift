@@ -12,10 +12,14 @@ public protocol UsageProvider: Sendable {
     var executableName: String { get }
     /// Command the user can run to sign in when the provider reports `signedOut`.
     var signInCommand: String { get }
+    /// False when the CLI cannot identify the account that owns a reading.
+    var allowsPersistedReadings: Bool { get }
     func read(previous: ProviderUsage?) -> ProviderUsage
 }
 
 public extension UsageProvider {
+    var allowsPersistedReadings: Bool { true }
+
     func unavailable(installed: Bool) -> ProviderUsage {
         ProviderUsage(
             id: id,
@@ -35,7 +39,14 @@ public struct UsageCollector: Sendable {
     }
 
     public static var standard: UsageCollector {
-        UsageCollector(providers: [ClaudeProvider(), CodexProvider()])
+        UsageCollector(providers: [ClaudeProvider(), CodexProvider(), AntigravityProvider()])
+    }
+
+    public func cacheableSnapshot(_ snapshot: UsageSnapshot) -> UsageSnapshot {
+        let allowed = Set(providers.filter(\.allowsPersistedReadings).map(\.id))
+        var copy = snapshot
+        copy.providers.removeAll { !allowed.contains($0.id) }
+        return copy
     }
 
     /// Reads every enabled provider concurrently and keeps their configured order.

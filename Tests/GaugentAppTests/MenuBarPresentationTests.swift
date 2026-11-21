@@ -3,6 +3,15 @@ import GaugentCore
 @testable import Gaugent
 
 final class MenuBarPresentationTests: XCTestCase {
+    func testAntigravityHasGoogleLabelAndBadge() {
+        let value = ProviderUsage(id: "antigravity", name: "Antigravity", windows: reading().windows,
+                                  updatedAt: now, condition: .ready)
+        XCTAssertTrue(presentation(value, at: now).toolTip.contains("Google · Antigravity"))
+        let icon = GaugentIconRenderer.menuBarIcon(providerID: "antigravity", remaining: 0.17)
+        XCTAssertEqual(icon.accessibilityDescription, "gaugent, Google")
+        XCTAssertEqual(icon.size.width, 20)
+    }
+
     private let now = Date(timeIntervalSince1970: 1_000_000)
 
     private func reading(resetAfter: TimeInterval = 3600, blocked: Bool = false) -> ProviderUsage {

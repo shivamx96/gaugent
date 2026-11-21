@@ -4,6 +4,40 @@ import GaugentCore
 
 final class AppModelTests: XCTestCase {
     @MainActor
+    func testNewProviderIsEnabledOnceWithoutReenablingDisabledTools() {
+        let suite = UUID().uuidString
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        defaults.set(["codex"], forKey: "enabledProviderIDs")
+        let first = AppModel(defaults: defaults, storageURL: nil, startAutomatically: false)
+        XCTAssertEqual(first.enabledProviderIDs, ["codex", "antigravity"])
+        defaults.set(["codex"], forKey: "enabledProviderIDs")
+        let second = AppModel(defaults: defaults, storageURL: nil, startAutomatically: false)
+        XCTAssertEqual(second.enabledProviderIDs, ["codex"])
+        defaults.removeObject(forKey: "knownProviderIDs")
+        defaults.set([String](), forKey: "enabledProviderIDs")
+        let disabled = AppModel(defaults: defaults, storageURL: nil, startAutomatically: false)
+        XCTAssertTrue(disabled.enabledProviderIDs.isEmpty)
+    }
+
+    @MainActor
+    func testTransientReadingsAreLiveButNeverRestoredOrSaved() async throws {
+        let suite = UUID().uuidString
+        let defaults = UserDefaults(suiteName: suite)!
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { defaults.removePersistentDomain(forName: suite); try? FileManager.default.removeItem(at: folder) }
+        let url = folder.appendingPathComponent("usage.json")
+        let provider = TransientProvider()
+        UsageCache.save(UsageSnapshot(checkedAt: Date(), providers: [provider.read(previous: nil)]), to: url)
+        let model = AppModel(collector: UsageCollector(providers: [provider]), defaults: defaults,
+                             storageURL: url, startAutomatically: false)
+        XCTAssertEqual(model.visibleProviders, [])
+        await model.refresh(reason: .user)
+        XCTAssertEqual(model.visibleProviders.count, 1)
+        XCTAssertEqual(UsageCache.load(from: url)?.providers, [])
+    }
+
+    @MainActor
     func testUnrepresentableCachedDatesHaveSafePresentation() {
         let model = AppModel(collector: UsageCollector(providers: []),
             defaults: UserDefaults(suiteName: UUID().uuidString)!, storageURL: nil, startAutomatically: false)
@@ -56,6 +90,19 @@ final class AppModelTests: XCTestCase {
         XCTAssertTrue(model.hasLoaded)
         XCTAssertEqual(model.snapshot?.providers.first?.windows, [])
         XCTAssertEqual(UsageCache.load(from: url)?.providers.first?.windows, [])
+    }
+}
+
+private struct TransientProvider: UsageProvider {
+    let id = "antigravity"
+    let name = "Antigravity"
+    let executableName = "agy"
+    let signInCommand = "agy"
+    let allowsPersistedReadings = false
+    func read(previous: ProviderUsage?) -> ProviderUsage {
+        ProviderUsage(id: id, name: name, installed: true, authenticated: true,
+            windows: [UsageWindow(label: "Gemini · Weekly", remainingPercent: 42, resetsAt: nil)],
+            updatedAt: Date(), condition: .ready)
     }
 }
 
